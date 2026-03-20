@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <a href="index.html" class="brand">
+          <div class="brand-logo">U</div>
+          <div class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>Leave Management</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Login Section -->
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="cards-grid" style="max-width: 900px; margin: 0 auto; gap: 2rem;">
+        
+        <!-- Login Form -->
+        <div id="loginCard" class="card" style="padding: 2.5rem;">
+          <h2 class="mb-2">Welcome Back</h2>
+          <p class="mb-4">Sign in to your account</p>
+          
+          <form id="loginForm">
+            <div class="form-group">
+              <label for="loginEmail">Email Address</label>
+              <input type="email" id="loginEmail" class="form-control" required placeholder="your.email@usiu.ac.ke">
+            </div>
+            
+            <div class="form-group">
+              <label for="loginPassword">Password</label>
+              <input type="password" id="loginPassword" class="form-control" required placeholder="Enter your password">
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+              Sign In
+            </button>
+          </form>
+          
+          <p class="text-center mt-4">
+            Don't have an account? 
+            <a href="#" id="showSignup" style="font-weight: 600;">Sign Up</a>
+          </p>
+        </div>
+        
+        <!-- Signup Form -->
+        <div id="signupCard" class="card" style="padding: 2.5rem; display: none;">
+          <h2 class="mb-2">Create Account</h2>
+          <p class="mb-4">Join USIU Leave Management System</p>
+          
+          <form id="signupForm">
+            <div class="form-group">
+              <label for="signupName">Full Name</label>
+              <input type="text" id="signupName" class="form-control" required placeholder="John Doe">
+            </div>
+            
+            <div class="form-group">
+              <label for="signupEmail">Email Address</label>
+              <input type="email" id="signupEmail" class="form-control" required placeholder="your.email@usiu.ac.ke">
+            </div>
+            
+            <div class="form-group">
+              <label for="signupRole">Account Type</label>
+              <select id="signupRole" class="form-control" required>
+                <option value="">Select your role</option>
+                <option value="staff">Staff Member</option>
+                <option value="admin">Administrator</option>
+                <option value="hr">Human Resources</option>
+                <option value="finance">Finance Department Head</option>
+                <option value="academics">Academics Department Head</option>
+                <option value="administration">Administration Head</option>
+                <option value="it">IT Services Head</option>
+                <option value="library">Library Department Head</option>
+                <option value="marketing">Marketing Department Head</option>
+              </select>
+            </div>
+            
+            <div id="staffFields" style="display: none;">
+              <div class="form-group">
+                <label for="signupDepartment">Department</label>
+                <select id="signupDepartment" class="form-control">
+                  <option value="">Select department</option>
+                  <option value="hr">Human Resources</option>
+                  <option value="finance">Finance</option>
+                  <option value="academics">Academics</option>
+                  <option value="administration">Administration</option>
+                  <option value="it">IT Services</option>
+                  <option value="library">Library</option>
+                  <option value="marketing">Marketing</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="signupEmployeeId">Employee ID</label>
+                <input type="text" id="signupEmployeeId" class="form-control" placeholder="EMP-001">
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="signupPassword">Password</label>
+              <input type="password" id="signupPassword" class="form-control" required placeholder="Minimum 6 characters" minlength="6">
+            </div>
+            
+            <div class="form-group">
+              <label for="signupConfirmPassword">Confirm Password</label>
+              <input type="password" id="signupConfirmPassword" class="form-control" required placeholder="Confirm your password">
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+              Create Account
+            </button>
+          </form>
+          
+          <p class="text-center mt-4">
+            Already have an account? 
+            <a href="#" id="showLogin" style="font-weight: 600;">Sign In</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <h4>Processing...</h4>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <div class="toast-icon">✓</div>
+    <div class="toast-content">
+      <h5>Success</h5>
+      <p>Action completed successfully</p>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  
+  <script>
+    // Toggle between login and signup
+    document.getElementById('showSignup').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('signupCard').style.display = 'block';
+    });
+    
+    document.getElementById('showLogin').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('signupCard').style.display = 'none';
+      document.getElementById('loginCard').style.display = 'block';
+    });
+    
+    // Show/hide staff fields based on role
+    document.getElementById('signupRole').addEventListener('change', (e) => {
+      const staffFields = document.getElementById('staffFields');
+      const department = document.getElementById('signupDepartment');
+      const employeeId = document.getElementById('signupEmployeeId');
+      
+      if (e.target.value === 'staff') {
+        staffFields.style.display = 'block';
+        department.required = true;
+        employeeId.required = true;
+      } else {
+        staffFields.style.display = 'none';
+        department.required = false;
+        employeeId.required = false;
+        
+        if (e.target.value !== 'admin' && e.target.value !== 'hr') {
+          department.value = e.target.value;
+        }
+      }
+    });
+    
+    // Handle login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      try {
+        await AuthModule.signIn(email, password);
+      } catch (error) {
+        // Error handled in AuthModule
+      }
+    });
+    
+    // Handle signup
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('signupName').value;
+      const email = document.getElementById('signupEmail').value;
+      const role = document.getElementById('signupRole').value;
+      const password = document.getElementById('signupPassword').value;
+      const confirmPassword = document.getElementById('signupConfirmPassword').value;
+      
+      if (password !== confirmPassword) {
+        AuthModule.showToast('Passwords do not match', 'error');
+        return;
+      }
+      
+      const userData = {
+        fullName: name,
+        role: role
+      };
+      
+      if (role === 'staff') {
+        const department = document.getElementById('signupDepartment').value;
+        const employeeId = document.getElementById('signupEmployeeId').value;
+        
+        if (!department || !employeeId) {
+          AuthModule.showToast('Please fill in all required fields', 'error');
+          return;
+        }
+        
+        userData.department = department;
+        userData.employeeId = employeeId;
+      } else if (role !== 'admin' && role !== 'hr') {
+        userData.department = role;
+      }
+      
+      try {
+        await AuthModule.signUp(email, password, userData);
+      } catch (error) {
+        // Error handled in AuthModule
+      }
+    });
+  </script>
+</body>
+</html>

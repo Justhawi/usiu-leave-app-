@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Dashboard - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <div class="brand">
+          <div class="brand-logo">U</div>
+          <div class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>IT Services</p>
+          </div>
+        </div>
+        <div class="nav-links">
+          <span id="userName" style="color: var(--white); font-weight: 600; font-size: 0.95rem;"></span>
+          <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <div>
+          <h2>IT Service Head Dashboard</h2>
+          <p>System management, user administration, and security monitoring</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button onclick="showSection('overview')" class="btn btn-primary" id="btn-overview">System Overview</button>
+          <button onclick="showSection('users')" class="btn btn-secondary" id="btn-users">User Management</button>
+          <button onclick="showSection('attendance')" class="btn btn-secondary" id="btn-attendance">Attendance</button>
+          <button onclick="showSection('security')" class="btn btn-secondary" id="btn-security">Security</button>
+          <button onclick="showSection('activity')" class="btn btn-secondary" id="btn-activity">Activity Log</button>
+          <button onclick="recordAttendance()" class="btn btn-success" id="checkInBtn">✓ Check In</button>
+          <button onclick="recordCheckout()" class="btn btn-warning" id="checkOutBtn" style="display: none;">⏱ Check Out</button>
+        </div>
+      </div>
+
+      <!-- System Overview Section -->
+      <div id="section-overview" class="section">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon gold">
+              <span style="font-size: 1.5rem;">👥</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Total Users</div>
+              <div class="stat-value" id="totalUsers">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white;">
+              <span style="font-size: 1.5rem;">📋</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Total Requests</div>
+              <div class="stat-value" id="totalRequests">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg: #f59e0b 0%, #fbbf24 100%); color: var(--primary-900);">
+              <span style="font-size: 1.5rem;">⏳</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value" id="pendingRequests">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <span style="font-size: 1.5rem;">✓</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">System Status</div>
+              <div class="stat-value" style="color: #22c55e;">Operational</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-grid" style="margin-top: 1.5rem;">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h4>Users by Role</h4>
+              <p>Distribution of user roles in the system</p>
+            </div>
+            <div style="height: 200px;">
+              <canvas id="rolesChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header">
+              <h4>Leave Requests by Status</h4>
+              <p>Overview of request statuses</p>
+            </div>
+            <div style="height: 200px;">
+              <canvas id="statusChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Active Issues</h3>
+          <div id="activeIssues">
+            <p style="color: var(--gray-400); text-align: center; padding: 2rem;">No active issues detected</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Management Section -->
+      <div id="section-users" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">User Management</h3>
+            <div style="display: flex; gap: 0.75rem;">
+              <input type="text" id="searchUsers" class="form-control" style="width: 250px;" placeholder="Search users..." oninput="filterUsers()">
+              <button onclick="showAddUserModal()" class="btn btn-primary">+ Add User</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Department</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <tr><td colspan="5" class="text-center" style="padding: 2rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attendance Section -->
+      <div id="section-attendance" class="section" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <span style="font-size: 1.5rem;">✓</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Checked In Today</div>
+              <div class="stat-value" id="checkedInToday">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: var(--primary-900);">
+              <span style="font-size: 1.5rem;">⏱</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Not Checked In</div>
+              <div class="stat-value" id="notCheckedIn">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon gold">
+              <span style="font-size: 1.5rem;">📅</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Total Records</div>
+              <div class="stat-value" id="totalAttendance">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">All Staff Attendance</h3>
+            <div style="display: flex; gap: 0.75rem;">
+              <input type="date" id="attendanceDate" class="form-control" style="width: 150px;" onchange="filterAttendanceByDate()">
+              <select id="attendanceUserFilter" class="form-control" style="width: 200px;" onchange="filterAttendanceByUser()">
+                <option value="all">All Users</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Staff Name</th>
+                  <th>Employee ID</th>
+                  <th>Department</th>
+                  <th>Date</th>
+                  <th>Check In</th>
+                  <th>Check Out</th>
+                  <th>Hours</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceTableBody">
+                <tr><td colspan="8" class="text-center" style="padding: 2rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Section -->
+      <div id="section-security" class="section" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon gold">
+              <span style="font-size: 1.5rem;">🔐</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Login Today</div>
+              <div class="stat-value" id="loginsToday">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444 0%, #f87171 100%); color: white;">
+              <span style="font-size: 1.5rem;">⚠️</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Failed Attempts</div>
+              <div class="stat-value" id="failedAttempts">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <span style="font-size: 1.5rem;">✓</span>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Active Sessions</div>
+              <div class="stat-value" id="activeSessions">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Security Alerts</h3>
+          <div id="securityAlerts">
+            <p style="color: var(--gray-400); text-align: center; padding: 2rem;">No security alerts</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Login History (Last 24 Hours)</h3>
+          <div id="loginHistory" class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Time</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="loginHistoryBody">
+                <tr><td colspan="4" class="text-center" style="padding: 2rem;">No recent logins</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Log Section -->
+      <div id="section-activity" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">System Activity Log</h3>
+            <select id="activityFilter" class="form-control" style="width: 200px;" onchange="filterActivities()">
+              <option value="all">All Activities</option>
+              <option value="auth">Login Attempts</option>
+              <option value="leave">Leave Requests</option>
+              <option value="approval">Approvals/Rejections</option>
+              <option value="user">User Management</option>
+            </select>
+          </div>
+          <div id="activityLog">
+            <p style="color: var(--gray-400); text-align: center; padding: 2rem;">Loading activity log...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit User Modal -->
+  <div id="userModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeUserModal()">×</button>
+      <div class="modal-header"><h3 id="userModalTitle">Add New User</h3></div>
+      <div class="modal-body">
+        <form id="userForm">
+          <div class="form-group">
+            <label for="userName">Full Name</label>
+            <input type="text" id="userName" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="userEmail">Email</label>
+            <input type="email" id="userEmail" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="userPassword">Temporary Password</label>
+            <input type="password" id="userPassword" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="userRole">Role</label>
+            <select id="userRole" class="form-control" required>
+              <option value="staff">Staff</option>
+              <option value="admin">Admin</option>
+              <option value="hr">HR</option>
+              <option value="finance">Finance</option>
+              <option value="academics">Academics</option>
+              <option value="administration">Administration</option>
+              <option value="it">IT</option>
+              <option value="library">Library</option>
+              <option value="marketing">Marketing</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="userDepartment">Department</label>
+            <input type="text" id="userDepartment" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="userEmployeeId">Employee ID</label>
+            <input type="text" id="userEmployeeId" class="form-control">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeUserModal()" class="btn btn-secondary">Cancel</button>
+        <button onclick="saveUser()" class="btn btn-primary">Save User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Actions Modal -->
+  <div id="userActionsModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeUserActionsModal()">×</button>
+      <div class="modal-header"><h3 id="userActionsTitle">User Actions</h3></div>
+      <div class="modal-body" id="userActionsContent"></div>
+      <div class="modal-footer">
+        <button onclick="closeUserActionsModal()" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content"><div class="loading-spinner"></div><h4>Loading...</h4></div>
+  </div>
+
+  <div id="toast" class="toast">
+    <div class="toast-icon">✓</div>
+    <div class="toast-content"><h5>Success</h5><p>Action completed</p></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leave.js"></script>
+  <script src="js/attendance.js"></script>
+  
+  <script>
+    let allUsers = [];
+    let allRequests = [];
+    let loginLogs = [];
+    let activityLog = [];
+    let charts = {};
+    let editingUserId = null;
+    
+    async function init() {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      if (!user || !profile) {
+        setTimeout(init, 500);
+        return;
+      }
+      document.getElementById('userName').textContent = profile.fullName;
+      await loadAllData();
+      initCharts();
+      await checkTodayAttendance();
+      await loadAllAttendance();
+    }
+    
+    async function loadAllData() {
+      try {
+        const db = firebase.firestore();
+        const usersSnap = await db.collection('users').get();
+        allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const requestsSnap = await db.collection('leave_requests').get();
+        allRequests = requestsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Load login logs for security - get all then sort in JS (no index needed)
+        try {
+          const logsSnap = await db.collection('login_logs').limit(200).get();
+          loginLogs = logsSnap.docs.map(doc => {
+            const data = doc.data();
+            data.id = doc.id;
+            // Ensure timestamp exists
+            if (!data.timestamp && data.date) {
+              data.timestamp = new Date(data.date);
+            }
+            return data;
+          });
+          // Sort by timestamp descending in JavaScript
+          loginLogs.sort((a, b) => {
+            const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+            const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+            return timeB - timeA;
+          });
+          console.log('Loaded login logs:', loginLogs.length);
+        } catch (logError) {
+          console.log('Login logs query failed (collection may be empty):', logError);
+          loginLogs = [];
+        }
+        
+        updateOverviewStats();
+        renderUsersTable();
+        
+        // Load activity log after data is loaded
+        loadActivityLog();
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+    
+    function updateOverviewStats() {
+      document.getElementById('totalUsers').textContent = allUsers.length;
+      document.getElementById('totalRequests').textContent = allRequests.length;
+      document.getElementById('pendingRequests').textContent = allRequests.filter(r => r.status === 'pending').length;
+    }
+    
+    function initCharts() {
+      const roleCounts = {};
+      allUsers.forEach(u => {
+        const role = u.role || 'staff';
+        roleCounts[role] = (roleCounts[role] || 0) + 1;
+      });
+      
+      if (charts.roles) charts.roles.destroy();
+      charts.roles = new Chart(document.getElementById('rolesChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(roleCounts),
+          datasets: [{
+            data: Object.values(roleCounts),
+            backgroundColor: ['#f59e0b', '#3b82f6', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+      
+      const statusCounts = { pending: 0, approved: 0, rejected: 0 };
+      allRequests.forEach(r => {
+        const status = r.status || 'pending';
+        if (statusCounts.hasOwnProperty(status)) statusCounts[status]++;
+      });
+      
+      if (charts.status) charts.status.destroy();
+      charts.status = new Chart(document.getElementById('statusChart'), {
+        type: 'bar',
+        data: {
+          labels: ['Pending', 'Approved', 'Rejected'],
+          datasets: [{
+            data: [statusCounts.pending, statusCounts.approved, statusCounts.rejected],
+            backgroundColor: ['#f59e0b', '#22c55e', '#ef4444']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+    
+    function showSection(section) {
+      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+      document.getElementById(`section-${section}`).style.display = 'block';
+      
+      document.querySelectorAll('.page-header .btn').forEach(btn => {
+        btn.className = btn.className.replace('btn-primary', 'btn-secondary');
+      });
+      const activeBtn = document.getElementById(`btn-${section}`);
+      if (activeBtn) activeBtn.className = activeBtn.className.replace('btn-secondary', 'btn-primary');
+      
+      if (section === 'security') {
+        // Refresh security data when tab is clicked
+        loadSecurityData();
+      }
+      if (section === 'attendance') {
+        loadAllAttendance();
+      }
+    }
+    
+    function renderUsersTable() {
+      const tbody = document.getElementById('usersTableBody');
+      if (allUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: 2rem;">No users found</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = allUsers.map(u => `
+        <tr>
+          <td>${u.fullName || u.name || u.head || 'N/A'}</td>
+          <td>${u.email || u.contact_email || 'N/A'}</td>
+          <td><span class="status-badge status-${u.role || 'staff'}">${u.role || 'staff'}</span></td>
+          <td>${u.department || 'N/A'}</td>
+          <td>
+            <button onclick="showUserActions('${u.id}')" class="btn btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">Actions</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+    
+    function filterUsers() {
+      const search = document.getElementById('searchUsers').value.toLowerCase();
+      const rows = document.querySelectorAll('#usersTableBody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+      });
+    }
+    
+    function showAddUserModal() {
+      editingUserId = null;
+      document.getElementById('userModalTitle').textContent = 'Add New User';
+      document.getElementById('userForm').reset();
+      document.getElementById('userModal').classList.add('active');
+    }
+    
+    function closeUserModal() {
+      document.getElementById('userModal').classList.remove('active');
+      editingUserId = null;
+    }
+    
+    async function saveUser() {
+      const name = document.getElementById('userName').value;
+      const email = document.getElementById('userEmail').value;
+      const password = document.getElementById('userPassword').value;
+      const role = document.getElementById('userRole').value;
+      const department = document.getElementById('userDepartment').value;
+      const employeeId = document.getElementById('userEmployeeId').value;
+      
+      if (!name || !email || !password) {
+        AuthModule.showToast('Please fill all required fields', 'error');
+        return;
+      }
+      
+      try {
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        // Create auth user
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        // Save user profile
+        await db.collection('users').doc(user.uid).set({
+          fullName: name,
+          email: email,
+          role: role,
+          department: department,
+          employeeId: employeeId,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Create leave balance for staff
+        if (role === 'staff') {
+          await db.collection('leave_balances').doc(user.uid).set({
+            userId: user.uid,
+            annualLeave: 21,
+            sickLeave: 10,
+            personalLeave: 5,
+            usedAnnual: 0,
+            usedSick: 0,
+            usedPersonal: 0
+          });
+        }
+        
+        closeUserModal();
+        await loadAllData();
+        AuthModule.showToast('User created successfully', 'success');
+      } catch (error) {
+        console.error('Error creating user:', error);
+        AuthModule.showToast('Error: ' + error.message, 'error');
+      }
+    }
+    
+    function showUserActions(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+      
+      document.getElementById('userActionsTitle').textContent = `Actions for ${user.fullName || user.name || 'User'}`;
+      document.getElementById('userActionsContent').innerHTML = `
+        <div style="display: grid; gap: 1rem;">
+          <button onclick="resetUserPassword('${userId}')" class="btn btn-primary" style="width: 100%;">Reset Password</button>
+          <button onclick="changeUserRole('${userId}')" class="btn btn-secondary" style="width: 100%;">Change Role</button>
+          <button onclick="deleteUser('${userId}')" class="btn btn-danger" style="width: 100%;">Delete User</button>
+        </div>
+      `;
+      document.getElementById('userActionsModal').classList.add('active');
+    }
+    
+    function closeUserActionsModal() {
+      document.getElementById('userActionsModal').classList.remove('active');
+    }
+    
+    async function resetUserPassword(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+      
+      const newPassword = prompt(`Enter new password for ${user.email || user.contact_email}:`);
+      if (!newPassword || newPassword.length < 6) {
+        AuthModule.showToast('Password must be at least 6 characters', 'error');
+        return;
+      }
+      
+      try {
+        const auth = firebase.auth();
+        await auth.sendPasswordResetEmail(user.email || user.contact_email);
+        closeUserActionsModal();
+        AuthModule.showToast('Password reset email sent', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error: ' + error.message, 'error');
+      }
+    }
+    
+    async function changeUserRole(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+      
+      const newRole = prompt(`Change role for ${user.email || user.contact_email}:\n\nOptions: staff, admin, hr, finance, academics, administration, it, library, marketing`, user.role || 'staff');
+      
+      if (!newRole) return;
+      
+      try {
+        const db = firebase.firestore();
+        await db.collection('users').doc(userId).update({ role: newRole });
+        closeUserActionsModal();
+        await loadAllData();
+        AuthModule.showToast('Role updated successfully', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error: ' + error.message, 'error');
+      }
+    }
+    
+    async function deleteUser(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+      
+      if (!confirm(`Are you sure you want to delete ${user.email || user.contact_email}?\n\nThis action cannot be undone.`)) {
+        return;
+      }
+      
+      try {
+        const db = firebase.firestore();
+        await db.collection('users').doc(userId).delete();
+        closeUserActionsModal();
+        await loadAllData();
+        AuthModule.showToast('User deleted successfully', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error: ' + error.message, 'error');
+      }
+    }
+    
+    async function loadSecurityData() {
+      try {
+        const db = firebase.firestore();
+        const logsSnap = await db.collection('login_logs').limit(200).get();
+        loginLogs = logsSnap.docs.map(doc => {
+          const data = doc.data();
+          data.id = doc.id;
+          if (!data.timestamp && data.date) {
+            data.timestamp = new Date(data.date);
+          }
+          return data;
+        });
+        // Sort by timestamp descending
+        loginLogs.sort((a, b) => {
+          const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+          const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+          return timeB - timeA;
+        });
+        console.log('Security data loaded:', loginLogs.length, 'logs');
+      } catch (error) {
+        console.error('Error loading security data:', error);
+        loginLogs = [];
+      }
+      updateSecurityStats();
+    }
+    
+    function updateSecurityStats() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      console.log('updateSecurityStats called, todayStr:', todayStr);
+      console.log('loginLogs:', loginLogs);
+      
+      // Filter login logs for today
+      const todayLogs = loginLogs.filter(log => {
+        const logDate = log.date || (log.timestamp ? (log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp)).toISOString().split('T')[0] : null);
+        console.log('logDate:', logDate, 'todayStr:', todayStr, 'match:', logDate === todayStr);
+        return logDate === todayStr;
+      });
+      
+      const successfulToday = todayLogs.filter(l => l.status === 'success').length;
+      const failedToday = todayLogs.filter(l => l.status === 'failed').length;
+      
+      console.log('successfulToday:', successfulToday, 'failedToday:', failedToday);
+      
+      document.getElementById('loginsToday').textContent = successfulToday;
+      document.getElementById('failedAttempts').textContent = failedToday;
+      document.getElementById('activeSessions').textContent = successfulToday;
+      
+      renderLoginHistory();
+      renderSecurityAlerts();
+    }
+    
+    function renderSecurityAlerts() {
+      const container = document.getElementById('securityAlerts');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      const failedLogs = loginLogs.filter(log => {
+        const logDate = log.date || (log.timestamp ? (log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp)).toISOString().split('T')[0] : null);
+        return logDate === todayStr && log.status === 'failed';
+      });
+      
+      if (failedLogs.length === 0) {
+        container.innerHTML = '<p style="color: var(--gray-400); text-align: center; padding: 2rem;">No security alerts</p>';
+        return;
+      }
+      
+      // Group by email to identify repeated failures
+      const byEmail = {};
+      failedLogs.forEach(log => {
+        if (!byEmail[log.email]) byEmail[log.email] = [];
+        byEmail[log.email].push(log);
+      });
+      
+      let html = '';
+      Object.entries(byEmail).forEach(([email, logs]) => {
+        const attempts = logs.length;
+        const lastAttempt = logs[0].timestamp ? (logs[0].timestamp.toDate ? logs[0].timestamp.toDate() : new Date(logs[0].timestamp)) : new Date();
+        
+        html += `
+          <div style="padding: 1rem; background: ${attempts >= 3 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)'}; border-left: 4px solid ${attempts >= 3 ? '#ef4444' : '#f59e0b'}; margin-bottom: 0.75rem; border-radius: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: ${attempts >= 3 ? '#ef4444' : '#f59e0b'};">⚠️ Failed Login Attempt${attempts > 1 ? 's' : ''}</strong>
+                <p style="margin: 0.25rem 0 0 0; color: var(--gray-300);">${email}</p>
+              </div>
+              <div style="text-align: right;">
+                <span style="background: ${attempts >= 3 ? '#ef4444' : '#f59e0b'}; color: white; padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.85rem; font-weight: 600;">
+                  ${attempts}x
+                </span>
+                <p style="margin: 0.25rem 0 0 0; color: var(--gray-500); font-size: 0.8rem;">
+                  Last: ${lastAttempt.toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function renderLoginHistory() {
+      const tbody = document.getElementById('loginHistoryBody');
+      
+      if (loginLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: 2rem;">No login history</td></tr>';
+        return;
+      }
+      
+      // Sort by timestamp descending
+      const sortedLogs = [...loginLogs].sort((a, b) => {
+        const timeA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)) : new Date(0);
+        const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)) : new Date(0);
+        return timeB - timeA;
+      });
+      
+      tbody.innerHTML = sortedLogs.slice(0, 20).map(log => {
+        const time = log.timestamp ? (log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp)) : new Date();
+        const isSuccess = log.status === 'success';
+        
+        // Find user name from email
+        const user = allUsers.find(u => (u.email || u.contact_email) === log.email);
+        const name = user ? (user.fullName || user.name || 'N/A') : log.email;
+        
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>${log.email}</td>
+            <td>${time.toLocaleString()}</td>
+            <td>
+              <span class="status-badge status-${isSuccess ? 'approved' : 'rejected'}">
+                ${isSuccess ? '✓ Success' : '✕ Failed'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    function loadActivityLog() {
+      activityLog = [];
+      
+      // Add login attempts to activity log
+      loginLogs.forEach(log => {
+        const time = log.timestamp ? (log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp)) : new Date();
+        activityLog.push({
+          type: 'auth',
+          user: log.email,
+          action: log.status === 'success' ? 'Successful login' : `Failed login attempt (${log.errorCode || 'unknown'})`,
+          time: time,
+          status: log.status === 'success' ? 'approved' : 'rejected'
+        });
+      });
+      
+      allRequests.forEach(r => {
+        activityLog.push({
+          type: 'leave',
+          user: r.staffName || 'Unknown',
+          action: `Submitted ${r.leaveType} leave request`,
+          time: r.requestDate ? (r.requestDate.toDate ? r.requestDate.toDate() : new Date(r.requestDate)) : new Date(),
+          status: r.status
+        });
+        
+        if (r.status === 'approved' || r.status === 'rejected') {
+          activityLog.push({
+            type: 'approval',
+            user: r.reviewedByName || 'Admin',
+            action: `${r.status === 'approved' ? 'Approved' : 'Rejected'} leave request`,
+            time: r.updatedAt ? (r.updatedAt.toDate ? r.updatedAt.toDate() : new Date(r.updatedAt)) : new Date(),
+            status: r.status
+          });
+        }
+      });
+      
+      allUsers.forEach(u => {
+        if (u.createdAt) {
+          activityLog.push({
+            type: 'user',
+            user: u.fullName || u.name || 'Unknown',
+            action: 'User account created',
+            time: u.createdAt.toDate ? u.createdAt.toDate() : new Date(),
+            status: 'info'
+          });
+        }
+      });
+      
+      activityLog.sort((a, b) => b.time - a.time);
+      renderActivityLog();
+    }
+    
+    function renderActivityLog() {
+      const container = document.getElementById('activityLog');
+      if (activityLog.length === 0) {
+        container.innerHTML = '<p style="color: var(--gray-400); text-align: center; padding: 2rem;">No activity recorded</p>';
+        return;
+      }
+      
+      container.innerHTML = activityLog.slice(0, 50).map(a => {
+        const icon = a.type === 'leave' ? '📋' : a.type === 'approval' ? '✓' : a.type === 'user' ? '👤' : a.type === 'auth' ? '🔐' : '📝';
+        const borderColor = a.status === 'approved' ? '#22c55e' : a.status === 'rejected' ? '#ef4444' : 'var(--gray-700)';
+        return `
+          <div style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--gray-700); border-left: 3px solid ${borderColor}; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.25rem;">${icon}</span>
+            <div style="flex: 1;">
+              <p style="margin: 0; color: var(--gray-200);">${a.action}</p>
+              <p style="margin: 0; font-size: 0.85rem; color: var(--gray-500);">by ${a.user}</p>
+            </div>
+            <span style="color: var(--gray-500); font-size: 0.85rem;">${a.time.toLocaleString()}</span>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function filterActivities() {
+      const filter = document.getElementById('activityFilter').value;
+      let filtered = activityLog;
+      
+      if (filter !== 'all') {
+        if (filter === 'leave') {
+          filtered = activityLog.filter(a => a.type === 'leave');
+        } else if (filter === 'approval') {
+          filtered = activityLog.filter(a => a.type === 'approval');
+        } else if (filter === 'auth') {
+          filtered = activityLog.filter(a => a.type === 'auth');
+        } else if (filter === 'user') {
+          filtered = activityLog.filter(a => a.type === 'user');
+        }
+      }
+      
+      const container = document.getElementById('activityLog');
+      if (filtered.length === 0) {
+        container.innerHTML = '<p style="color: var(--gray-400); text-align: center; padding: 2rem;">No activities found</p>';
+        return;
+      }
+      
+      container.innerHTML = filtered.slice(0, 50).map(a => {
+        const icon = a.type === 'leave' ? '📋' : a.type === 'approval' ? '✓' : a.type === 'user' ? '👤' : a.type === 'auth' ? '🔐' : '📝';
+        const borderColor = a.status === 'approved' ? '#22c55e' : a.status === 'rejected' ? '#ef4444' : 'var(--gray-700)';
+        return `
+          <div style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--gray-700); border-left: 3px solid ${borderColor}; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.25rem;">${icon}</span>
+            <div style="flex: 1;">
+              <p style="margin: 0; color: var(--gray-200);">${a.action}</p>
+              <p style="margin: 0; font-size: 0.85rem; color: var(--gray-500);">by ${a.user}</p>
+            </div>
+            <span style="color: var(--gray-500); font-size: 0.85rem;">${a.time.toLocaleString()}</span>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // Check In/Out Functions
+    async function checkTodayAttendance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        if (!user) return;
+        const todayRecord = await AttendanceModule.getTodayAttendance(user.uid);
+        
+        const checkInBtn = document.getElementById('checkInBtn');
+        const checkOutBtn = document.getElementById('checkOutBtn');
+        
+        if (todayRecord) {
+          if (checkInBtn) checkInBtn.style.display = 'none';
+          if (checkOutBtn) {
+            if (todayRecord.checkOutTime) {
+              checkOutBtn.style.display = 'none';
+            } else {
+              checkOutBtn.style.display = 'inline-flex';
+            }
+          }
+        } else {
+          if (checkInBtn) checkInBtn.style.display = 'inline-flex';
+          if (checkOutBtn) checkOutBtn.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error checking attendance:', error);
+      }
+    }
+    
+    async function recordAttendance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        if (!user) return;
+        await AttendanceModule.recordAttendance(user.uid);
+        await checkTodayAttendance();
+      } catch (error) {
+        AuthModule.showToast('Error recording attendance', 'error');
+      }
+    }
+    
+    async function recordCheckout() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        if (!user) return;
+        await AttendanceModule.recordCheckout(user.uid);
+        await checkTodayAttendance();
+      } catch (error) {
+        AuthModule.showToast('Error recording checkout', 'error');
+      }
+    }
+    
+    // Attendance Management
+    let allAttendance = [];
+    
+    async function loadAllAttendance() {
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('attendance').orderBy('createdAt', 'desc').limit(200).get();
+        allAttendance = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        updateAttendanceStats();
+        populateUserFilter();
+        renderAttendanceTable();
+      } catch (error) {
+        console.error('Error loading attendance:', error);
+        document.getElementById('attendanceTableBody').innerHTML = '<tr><td colspan="8" class="text-center" style="padding: 2rem;">Error loading data</td></tr>';
+      }
+    }
+    
+    function updateAttendanceStats() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayRecords = allAttendance.filter(r => {
+        if (!r.date) return false;
+        const recordDate = r.date.toDate ? r.date.toDate() : new Date(r.date);
+        recordDate.setHours(0, 0, 0, 0);
+        return recordDate.getTime() === today.getTime();
+      });
+      
+      const checkedIn = new Set(todayRecords.map(r => r.userId));
+      document.getElementById('checkedInToday').textContent = checkedIn.size;
+      document.getElementById('notCheckedIn').textContent = allUsers.length - checkedIn.size;
+      document.getElementById('totalAttendance').textContent = allAttendance.length;
+    }
+    
+    function populateUserFilter() {
+      const select = document.getElementById('attendanceUserFilter');
+      select.innerHTML = '<option value="all">All Users</option>';
+      allUsers.forEach(u => {
+        const name = u.fullName || u.name || u.head || 'Unknown';
+        select.innerHTML += `<option value="${u.id}">${name}</option>`;
+      });
+    }
+    
+    function renderAttendanceTable() {
+      const tbody = document.getElementById('attendanceTableBody');
+      let filtered = allAttendance;
+      
+      const dateFilter = document.getElementById('attendanceDate').value;
+      const userFilter = document.getElementById('attendanceUserFilter').value;
+      
+      if (dateFilter) {
+        const filterDate = new Date(dateFilter);
+        filterDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(r => {
+          if (!r.date) return false;
+          const recordDate = r.date.toDate ? r.date.toDate() : new Date(r.date);
+          recordDate.setHours(0, 0, 0, 0);
+          return recordDate.getTime() === filterDate.getTime();
+        });
+      }
+      
+      if (userFilter !== 'all') {
+        filtered = filtered.filter(r => r.userId === userFilter);
+      }
+      
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding: 2rem;">No attendance records found</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = filtered.slice(0, 50).map(r => {
+        const user = allUsers.find(u => u.id === r.userId) || {};
+        const name = user.fullName || user.name || r.staffName || 'Unknown';
+        const empId = user.employeeId || r.employeeId || 'N/A';
+        const dept = (user.department || r.department || 'N/A').toUpperCase();
+        
+        const recordDate = r.date ? (r.date.toDate ? r.date.toDate() : new Date(r.date)) : new Date();
+        const checkIn = r.checkInTime ? (r.checkInTime.toDate ? r.checkInTime.toDate() : new Date(r.checkInTime)) : null;
+        const checkOut = r.checkOutTime ? (r.checkOutTime.toDate ? r.checkOutTime.toDate() : new Date(r.checkOutTime)) : null;
+        
+        const hours = checkIn && checkOut ? Math.round((checkOut - checkIn) / (1000 * 60 * 60) * 10) / 10 : (checkIn ? 'In Progress' : '-');
+        
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>${empId}</td>
+            <td>${dept}</td>
+            <td>${recordDate.toLocaleDateString()}</td>
+            <td>${checkIn ? checkIn.toLocaleTimeString() : '-'}</td>
+            <td>${checkOut ? checkOut.toLocaleTimeString() : '-'}</td>
+            <td>${hours}</td>
+            <td><span class="status-badge status-${r.status || 'present'}">${r.status || 'present'}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    function filterAttendanceByDate() {
+      renderAttendanceTable();
+    }
+    
+    function filterAttendanceByUser() {
+      renderAttendanceTable();
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(init, 1000);
+    });
+  </script>
+</body>
+</html>

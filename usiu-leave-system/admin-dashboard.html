@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <div class="brand">
+          <div class="brand-logo">U</div>
+          <div class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>Admin Portal</p>
+          </div>
+        </div>
+        <div class="nav-links">
+          <span id="userName" style="color: var(--white); font-weight: 600; font-size: 0.95rem;"></span>
+          <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <div>
+          <h2>Administrator Dashboard</h2>
+          <p>Full system control, configuration, and organization management</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button onclick="showSection('overview')" class="btn btn-primary" id="btn-overview">Overview</button>
+          <button onclick="showSection('policies')" class="btn btn-secondary" id="btn-policies">Leave Policies</button>
+          <button onclick="showSection('workflows')" class="btn btn-secondary" id="btn-workflows">Approval Workflows</button>
+          <button onclick="showSection('departments')" class="btn btn-secondary" id="btn-departments">Departments</button>
+          <button onclick="showSection('users')" class="btn btn-secondary" id="btn-users">User Management</button>
+          <button onclick="showSection('settings')" class="btn btn-secondary" id="btn-settings">Global Settings</button>
+          <button onclick="showSection('reports')" class="btn btn-secondary" id="btn-reports">Reports</button>
+        </div>
+      </div>
+
+      <!-- Overview Section -->
+      <div id="section-overview" class="section">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon gold"><span style="font-size: 1.5rem;">👥</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Total Users</div>
+              <div class="stat-value" id="totalUsers">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white;"><span style="font-size: 1.5rem;">📋</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Total Requests</div>
+              <div class="stat-value" id="totalRequests">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: var(--primary-900);"><span style="font-size: 1.5rem;">⏳</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value" id="pendingRequests">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><span style="font-size: 1.5rem;">🏢</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Departments</div>
+              <div class="stat-value" id="totalDepts">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-grid" style="margin-top: 1.5rem;">
+          <div class="chart-card">
+            <div class="chart-header"><h4>Requests by Department</h4><p>Distribution across departments</p></div>
+            <div style="height: 250px;"><canvas id="deptChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><h4>Requests by Status</h4><p>Current request status</p></div>
+            <div style="height: 250px;"><canvas id="statusChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">System Activity Summary</h3>
+          <div id="activitySummary" class="table-container">
+            <table>
+              <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+              <tbody id="summaryTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leave Policies Section -->
+      <div id="section-policies" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">Leave Types Configuration</h3>
+            <button onclick="showAddLeaveTypeModal()" class="btn btn-primary">+ Add Leave Type</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Leave Type</th><th>Default Days</th><th>Max Days</th><th>Carry Forward</th><th>Paid</th><th>Actions</th></tr></thead>
+              <tbody id="leaveTypesTableBody"><tr><td colspan="6" class="text-center" style="padding: 2rem;">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Leave Balance Settings</h3>
+          <form id="balanceForm">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+              <div class="form-group">
+                <label for="defaultAnnual">Default Annual Leave</label>
+                <input type="number" id="defaultAnnual" class="form-control" value="21" min="0">
+              </div>
+              <div class="form-group">
+                <label for="defaultSick">Default Sick Leave</label>
+                <input type="number" id="defaultSick" class="form-control" value="10" min="0">
+              </div>
+              <div class="form-group">
+                <label for="defaultPersonal">Default Personal Leave</label>
+                <input type="number" id="defaultPersonal" class="form-control" value="5" min="0">
+              </div>
+              <div class="form-group">
+                <label for="carryForward">Carry Forward Limit</label>
+                <input type="number" id="carryForward" class="form-control" value="5" min="0">
+              </div>
+            </div>
+            <div style="margin-top: 1.5rem;">
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Approval Workflows Section -->
+      <div id="section-workflows" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Approval Hierarchy</h3>
+          <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+            <p style="color: var(--gray-300); margin: 0;">Configure how leave requests flow through approval levels.</p>
+          </div>
+          <form id="workflowForm">
+            <div class="form-group">
+              <label for="approvalLevels">Approval Levels</label>
+              <select id="approvalLevels" class="form-control" onchange="updateWorkflowFields()">
+                <option value="1">Single Approval (Direct Manager)</option>
+                <option value="2">Two-Level Approval (Manager → Department Head)</option>
+                <option value="3">Three-Level Approval (Manager → Dept Head → HR)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="autoApprove">Auto-approve leave requests shorter than (days)</label>
+              <input type="number" id="autoApprove" class="form-control" value="0" min="0" placeholder="0 = disabled">
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="requireDocumentation" style="margin-right: 0.5rem;">
+                Require documentation for sick leave > 2 days
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="allowOverwriteBalance" style="margin-right: 0.5rem;">
+                Allow HR to overwrite leave balance
+              </label>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Workflow Settings</button>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Reporting Hierarchy</h3>
+          <div id="reportingHierarchy"></div>
+        </div>
+      </div>
+
+      <!-- Departments Section -->
+      <div id="section-departments" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">Organization Structure</h3>
+            <button onclick="showAddDepartmentModal()" class="btn btn-primary">+ Add Department</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Department</th><th>Head</th><th>Manager</th><th>Staff Count</th><th>Actions</th></tr></thead>
+              <tbody id="departmentsTableBody"><tr><td colspan="5" class="text-center" style="padding: 2rem;">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Management Section -->
+      <div id="section-users" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">User & Role Management</h3>
+            <div style="display: flex; gap: 0.75rem;">
+              <input type="text" id="searchUsers" class="form-control" style="width: 250px;" placeholder="Search users..." oninput="filterUsers()">
+              <button onclick="showAddUserModal()" class="btn btn-primary">+ Add User</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Permissions</th><th>Actions</th></tr></thead>
+              <tbody id="usersTableBody"><tr><td colspan="6" class="text-center" style="padding: 2rem;">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Role Permissions</h3>
+          <div id="rolePermissions"></div>
+        </div>
+      </div>
+
+      <!-- Global Settings Section -->
+      <div id="section-settings" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Working Days & Hours</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+            <div class="form-group">
+              <label>Working Days</label>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <label><input type="checkbox" name="workday" value="mon" checked> Mon</label>
+                <label><input type="checkbox" name="workday" value="tue" checked> Tue</label>
+                <label><input type="checkbox" name="workday" value="wed" checked> Wed</label>
+                <label><input type="checkbox" name="workday" value="thu" checked> Thu</label>
+                <label><input type="checkbox" name="workday" value="fri" checked> Fri</label>
+                <label><input type="checkbox" name="workday" value="sat"> Sat</label>
+                <label><input type="checkbox" name="workday" value="sun"> Sun</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="workStart">Work Start Time</label>
+              <input type="time" id="workStart" class="form-control" value="08:00">
+            </div>
+            <div class="form-group">
+              <label for="workEnd">Work End Time</label>
+              <input type="time" id="workEnd" class="form-control" value="17:00">
+            </div>
+          </div>
+          <div style="margin-top: 1rem;">
+            <button onclick="saveWorkingHours()" class="btn btn-primary">Save Working Hours</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0;">Company Holidays</h3>
+            <button onclick="showAddHolidayModal()" class="btn btn-primary">+ Add Holiday</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Holiday</th><th>Date</th><th>Year</th><th>Actions</th></tr></thead>
+              <tbody id="holidaysTableBody"><tr><td colspan="4" class="text-center" style="padding: 2rem;">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">System Features</h3>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="featureCheckIn" checked style="margin-right: 0.5rem;">
+              Enable Attendance Check-in/Check-out
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="featureLate" checked style="margin-right: 0.5rem;">
+              Mark as late after 9:00 AM
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="featureEmail" checked style="margin-right: 0.5rem;">
+              Enable Email Notifications
+            </label>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="featureSelfService" checked style="margin-right: 0.5rem;">
+              Allow Self-Service Leave Requests
+            </label>
+          </div>
+          <div style="margin-top: 1rem;">
+            <button onclick="saveFeatures()" class="btn btn-primary">Save Feature Settings</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports Section -->
+      <div id="section-reports" class="section" style="display: none;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon gold"><span style="font-size: 1.5rem;">📊</span></div>
+            <div class="stat-content">
+              <div class="stat-label">This Month</div>
+              <div class="stat-value" id="monthRequests">0</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><span style="font-size: 1.5rem;">✅</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Approval Rate</div>
+              <div class="stat-value" id="approvalRate">0%</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%); color: white;"><span style="font-size: 1.5rem;">📅</span></div>
+            <div class="stat-content">
+              <div class="stat-label">Avg Days/Request</div>
+              <div class="stat-value" id="avgDays">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-grid" style="margin-top: 1.5rem;">
+          <div class="chart-card">
+            <div class="chart-header"><h4>Monthly Trends</h4><p>Requests over last 6 months</p></div>
+            <div style="height: 250px;"><canvas id="monthlyChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><h4>Leave Type Distribution</h4><p>By leave type</p></div>
+            <div style="height: 250px;"><canvas id="leaveTypeChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Department Performance</h3>
+          <div id="deptPerformance" class="table-container">
+            <table>
+              <thead><tr><th>Department</th><th>Requests</th><th>Approved</th><th>Pending</th><th>Rejected</th><th>Approval Rate</th></tr></thead>
+              <tbody id="deptPerfTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1.5rem;">Top Leave Reasons</h3>
+          <div id="topReasons"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="genericModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal('genericModal')">×</button>
+      <div class="modal-header"><h3 id="genericModalTitle">Modal</h3></div>
+      <div class="modal-body" id="genericModalContent"></div>
+      <div class="modal-footer" id="genericModalFooter"></div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h4>Loading...</h4></div></div>
+  <div id="toast" class="toast"><div class="toast-icon">✓</div><div class="toast-content"><h5>Success</h5><p>Action completed</p></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leave.js"></script>
+  <script src="js/attendance.js"></script>
+
+  <script>
+    let allUsers = [];
+    let allRequests = [];
+    let allDepartments = [];
+    let charts = {};
+    let settings = {};
+
+    async function init() {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      if (!user || !profile) { setTimeout(init, 500); return; }
+      document.getElementById('userName').textContent = profile.fullName;
+      await loadAllData();
+      initCharts();
+    }
+
+    async function loadAllData() {
+      try {
+        const db = firebase.firestore();
+        const [usersSnap, requestsSnap, deptsSnap, settingsSnap] = await Promise.all([
+          db.collection('users').get(),
+          db.collection('leave_requests').get(),
+          db.collection('departments').get(),
+          db.collection('settings').doc('global').get()
+        ]);
+        allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allRequests = requestsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allDepartments = deptsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (settingsSnap.exists) settings = settingsSnap.data();
+        updateOverviewStats();
+        loadLeaveTypes();
+        loadDepartments();
+        loadUsers();
+        loadHolidays();
+        generateReports();
+      } catch (error) { console.error('Error loading data:', error); }
+    }
+
+    function showSection(section) {
+      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+      document.getElementById(`section-${section}`).style.display = 'block';
+      document.querySelectorAll('.page-header .btn').forEach(b => b.className = b.className.replace('btn-primary', 'btn-secondary'));
+      const btn = document.getElementById(`btn-${section}`);
+      if (btn) btn.className = btn.className.replace('btn-secondary', 'btn-primary');
+      if (section === 'reports') setTimeout(initCharts, 100);
+    }
+
+    function updateOverviewStats() {
+      document.getElementById('totalUsers').textContent = allUsers.length;
+      document.getElementById('totalRequests').textContent = allRequests.length;
+      document.getElementById('pendingRequests').textContent = allRequests.filter(r => r.status === 'pending').length;
+      document.getElementById('totalDepts').textContent = allDepartments.length || 8;
+      
+      const tbody = document.getElementById('summaryTableBody');
+      const approved = allRequests.filter(r => r.status === 'approved').length;
+      const rejected = allRequests.filter(r => r.status === 'rejected').length;
+      tbody.innerHTML = `
+        <tr><td>Total Requests</td><td>${allRequests.length}</td></tr>
+        <tr><td>Pending Requests</td><td>${allRequests.filter(r => r.status === 'pending').length}</td></tr>
+        <tr><td>Approved Requests</td><td>${approved}</td></tr>
+        <tr><td>Rejected Requests</td><td>${rejected}</td></tr>
+        <tr><td>Approval Rate</td><td>${allRequests.length ? Math.round(approved / allRequests.length * 100) : 0}%</td></tr>
+        <tr><td>Active Users</td><td>${allUsers.length}</td></tr>
+      `;
+    }
+
+    function initCharts() {
+      const depts = {};
+      allRequests.forEach(r => { depts[r.department] = (depts[r.department] || 0) + 1; });
+      
+      if (charts.dept) charts.dept.destroy();
+      charts.dept = new Chart(document.getElementById('deptChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(depts).map(d => (d || 'N/A').toUpperCase()), datasets: [{ data: Object.values(depts), backgroundColor: '#f59e0b' }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+
+      const status = { pending: allRequests.filter(r => r.status === 'pending').length, approved: allRequests.filter(r => r.status === 'approved').length, rejected: allRequests.filter(r => r.status === 'rejected').length };
+      if (charts.status) charts.status.destroy();
+      charts.status = new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: { labels: ['Pending', 'Approved', 'Rejected'], datasets: [{ data: [status.pending, status.approved, status.rejected], backgroundColor: ['#f59e0b', '#22c55e', '#ef4444'] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Monthly chart
+      const months = [], monthlyData = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(); d.setMonth(d.getMonth() - i);
+        months.push(d.toLocaleDateString('en-US', { month: 'short' }));
+        monthlyData.push(allRequests.filter(r => { const rd = r.requestDate?.toDate(); return rd && rd.getMonth() === d.getMonth() && rd.getFullYear() === d.getFullYear(); }).length);
+      }
+      if (charts.monthly) charts.monthly.destroy();
+      charts.monthly = new Chart(document.getElementById('monthlyChart'), {
+        type: 'line',
+        data: { labels: months, datasets: [{ data: monthlyData, borderColor: '#3b82f6', tension: 0.4 }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Leave type chart
+      const types = { annual: 0, sick: 0, personal: 0, emergency: 0 };
+      allRequests.forEach(r => { if (types.hasOwnProperty(r.leaveType)) types[r.leaveType]++; });
+      if (charts.types) charts.types.destroy();
+      charts.types = new Chart(document.getElementById('leaveTypeChart'), {
+        type: 'pie',
+        data: { labels: ['Annual', 'Sick', 'Personal', 'Emergency'], datasets: [{ data: [types.annual, types.sick, types.personal, types.emergency], backgroundColor: ['#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899'] }] },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    function generateReports() {
+      const approved = allRequests.filter(r => r.status === 'approved').length;
+      document.getElementById('approvalRate').textContent = allRequests.length ? Math.round(approved / allRequests.length * 100) + '%' : '0%';
+      const totalDays = allRequests.reduce((sum, r) => sum + (r.numberOfDays || 1), 0);
+      document.getElementById('avgDays').textContent = allRequests.length ? (totalDays / allRequests.length).toFixed(1) : '0';
+      
+      const thisMonth = allRequests.filter(r => { const d = r.requestDate?.toDate(); const now = new Date(); return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+      document.getElementById('monthRequests').textContent = thisMonth.length;
+
+      const tbody = document.getElementById('deptPerfTableBody');
+      const depts = [...new Set(allRequests.map(r => r.department))];
+      tbody.innerHTML = depts.map(d => {
+        const deptReqs = allRequests.filter(r => r.department === d);
+        const app = deptReqs.filter(r => r.status === 'approved').length;
+        return `<tr><td>${(d || 'N/A').toUpperCase()}</td><td>${deptReqs.length}</td><td>${app}</td><td>${deptReqs.filter(r => r.status === 'pending').length}</td><td>${deptReqs.filter(r => r.status === 'rejected').length}</td><td>${deptReqs.length ? Math.round(app / deptReqs.length * 100) : 0}%</td></tr>`;
+      }).join('');
+    }
+
+    // Leave Types
+    function loadLeaveTypes() {
+      const types = [
+        { name: 'Annual Leave', days: 21, max: 30, carryForward: true, paid: true },
+        { name: 'Sick Leave', days: 10, max: 15, carryForward: false, paid: true },
+        { name: 'Personal Leave', days: 5, max: 10, carryForward: false, paid: false },
+        { name: 'Emergency Leave', days: 3, max: 5, carryForward: false, paid: true }
+      ];
+      const tbody = document.getElementById('leaveTypesTableBody');
+      tbody.innerHTML = types.map(t => `
+        <tr>
+          <td>${t.name}</td>
+          <td>${t.days}</td>
+          <td>${t.max}</td>
+          <td>${t.carryForward ? 'Yes' : 'No'}</td>
+          <td>${t.paid ? 'Yes' : 'No'}</td>
+          <td><button class="btn btn-secondary" style="padding: 0.3rem 0.75rem;" onclick="editLeaveType('${t.name}')">Edit</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function showAddLeaveTypeModal() {
+      document.getElementById('genericModalTitle').textContent = 'Add Leave Type';
+      document.getElementById('genericModalContent').innerHTML = `
+        <div class="form-group"><label>Leave Type Name</label><input type="text" id="ltName" class="form-control"></div>
+        <div class="form-group"><label>Default Days</label><input type="number" id="ltDays" class="form-control" value="5"></div>
+        <div class="form-group"><label>Max Days</label><input type="number" id="ltMax" class="form-control" value="10"></div>
+        <div class="form-group"><label><input type="checkbox" id="ltCarry"> Allow Carry Forward</label></div>
+        <div class="form-group"><label><input type="checkbox" id="ltPaid" checked> Paid Leave</label></div>
+      `;
+      document.getElementById('genericModalFooter').innerHTML = `<button onclick="closeModal('genericModal')" class="btn btn-secondary">Cancel</button><button onclick="saveLeaveType()" class="btn btn-primary">Save</button>`;
+      document.getElementById('genericModal').classList.add('active');
+    }
+
+    function saveLeaveType() { closeModal('genericModal'); showToast('Leave type saved', 'success'); }
+    function editLeaveType(name) { showToast(`Edit ${name} - feature coming soon`, 'info'); }
+
+    // Departments
+    function loadDepartments() {
+      const depts = [
+        { name: 'Human Resources', head: 'HR Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'hr').length },
+        { name: 'Finance', head: 'Finance Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'finance').length },
+        { name: 'IT Services', head: 'IT Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'it').length },
+        { name: 'Academics', head: 'Academic Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'academics').length },
+        { name: 'Administration', head: 'Admin Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'administration').length },
+        { name: 'Library', head: 'Library Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'library').length },
+        { name: 'Marketing', head: 'Marketing Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'marketing').length },
+        { name: 'Admissions', head: 'Admissions Manager', manager: 'TBD', staff: allUsers.filter(u => u.department === 'admissions').length }
+      ];
+      const tbody = document.getElementById('departmentsTableBody');
+      tbody.innerHTML = depts.map(d => `
+        <tr>
+          <td>${d.name}</td><td>${d.head}</td><td>${d.manager}</td><td>${d.staff}</td>
+          <td><button class="btn btn-secondary" style="padding: 0.3rem 0.75rem;">Edit</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function showAddDepartmentModal() { showToast('Add department feature coming soon', 'info'); }
+
+    // Users
+    function loadUsers() {
+      const tbody = document.getElementById('usersTableBody');
+      tbody.innerHTML = allUsers.map(u => `
+        <tr>
+          <td>${u.fullName || u.name || 'N/A'}</td>
+          <td>${u.email || 'N/A'}</td>
+          <td><span class="status-badge status-${u.role || 'staff'}">${u.role || 'staff'}</span></td>
+          <td>${(u.department || 'N/A').toUpperCase()}</td>
+          <td>Full</td>
+          <td><button class="btn btn-secondary" style="padding: 0.3rem 0.75rem;" onclick="editUser('${u.id}')">Edit</button></td>
+        </tr>
+      `).join('');
+
+      const permDiv = document.getElementById('rolePermissions');
+      const roles = ['admin', 'hr', 'staff', 'finance', 'academics', 'administration', 'it', 'library', 'marketing'];
+      permDiv.innerHTML = roles.map(role => `
+        <div style="margin-bottom: 1rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+          <h4 style="text-transform: capitalize; margin-bottom: 0.75rem;">${role}</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: 0.85rem; color: var(--gray-300);">
+            <label><input type="checkbox" ${['admin', 'hr'].includes(role) ? 'checked' : ''}> View Requests</label>
+            <label><input type="checkbox" ${['admin', 'hr', 'department'].includes(role) ? 'checked' : ''}> Approve Requests</label>
+            <label><input type="checkbox" ${role === 'admin' ? 'checked' : ''}> Manage Users</label>
+            <label><input type="checkbox" ${['admin', 'hr'].includes(role) ? 'checked' : ''}> View Reports</label>
+            <label><input type="checkbox" ${['admin'].includes(role) ? 'checked' : ''}> System Config</label>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterUsers() {
+      const search = document.getElementById('searchUsers').value.toLowerCase();
+      document.querySelectorAll('#usersTableBody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(search) ? '' : 'none';
+      });
+    }
+
+    function showAddUserModal() { showToast('Add user feature coming soon', 'info'); }
+    function editUser(id) { showToast('Edit user feature coming soon', 'info'); }
+
+    // Holidays
+    function loadHolidays() {
+      const holidays = [
+        { name: "New Year's Day", date: '2026-01-01', year: 2026 },
+        { name: "Good Friday", date: '2026-04-03', year: 2026 },
+        { name: "Easter Monday", date: '2026-04-06', year: 2026 },
+        { name: "Labour Day", date: '2026-05-01', year: 2026 },
+        { name: "Madaraka Day", date: '2026-06-01', year: 2026 },
+        { name: "Independence Day", date: '2026-07-01', year: 2026 },
+        { name: "Huduma Day", date: '2026-10-10', year: 2026 },
+        { name: "Mashujaa Day", date: '2026-10-20', year: 2026 },
+        { name: "Jamhuri Day", date: '2026-12-12', year: 2026 },
+        { name: "Christmas Day", date: '2026-12-25', year: 2026 },
+        { name: "Boxing Day", date: '2026-12-26', year: 2026 }
+      ];
+      const tbody = document.getElementById('holidaysTableBody');
+      tbody.innerHTML = holidays.map(h => `
+        <tr><td>${h.name}</td><td>${h.date}</td><td>${h.year}</td><td><button class="btn btn-danger" style="padding: 0.3rem 0.75rem;">Delete</button></td></tr>
+      `).join('');
+    }
+
+    function showAddHolidayModal() { showToast('Add holiday feature coming soon', 'info'); }
+
+    // Settings
+    function saveWorkingHours() {
+      const days = Array.from(document.querySelectorAll('input[name="workday"]:checked')).map(c => c.value);
+      const start = document.getElementById('workStart').value;
+      const end = document.getElementById('workEnd').value;
+      showToast('Working hours saved', 'success');
+    }
+
+    function saveFeatures() { showToast('Feature settings saved', 'success'); }
+
+    // Workflow
+    function updateWorkflowFields() {
+      const levels = document.getElementById('approvalLevels').value;
+      showToast(`Approval levels set to ${levels}`, 'info');
+    }
+
+    document.getElementById('workflowForm').addEventListener('submit', e => { e.preventDefault(); showToast('Workflow settings saved', 'success'); });
+    document.getElementById('balanceForm').addEventListener('submit', e => { e.preventDefault(); showToast('Balance settings saved', 'success'); });
+
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function showToast(msg, type = 'info') { const t = document.getElementById('toast'); t.querySelector('p').textContent = msg; t.className = `toast ${type}`; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 4000); }
+
+    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1000));
+  </script>
+</body>
+</html>

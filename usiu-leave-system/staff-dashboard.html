@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Dashboard - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+  </script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <div class="brand">
+          <div class="brand-logo">U</div>
+          <div class="brand-text">
+            <h1>USIU-Africa</h1>
+            <p>Staff Portal</p>
+          </div>
+        </div>
+        <div class="nav-links">
+          <span id="userName" style="color: var(--white); font-weight: 600; font-size: 0.95rem;"></span>
+          <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="page-wrapper">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <h2>Staff Dashboard</h2>
+          <p id="welcomeMessage">Welcome back!</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button onclick="showNewLeaveModal()" class="btn btn-primary">
+            📋 New Leave Request
+          </button>
+          <button onclick="recordAttendance()" class="btn btn-success" id="checkInBtn">
+            ✓ Check In
+          </button>
+          <button onclick="recordCheckout()" class="btn btn-warning" id="checkOutBtn" style="display: none;">
+            ⏱ Check Out
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon gold">
+            <span style="font-size: 1.5rem;">📅</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Annual Leave</div>
+            <div class="stat-value" id="annualLeave">-</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: var(--primary-900);">
+            <span style="font-size: 1.5rem;">🏥</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Sick Leave</div>
+            <div class="stat-value" id="sickLeave">-</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%); color: var(--white);">
+            <span style="font-size: 1.5rem;">⏰</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Personal Leave</div>
+            <div class="stat-value" id="personalLeave">-</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon green">
+            <span style="font-size: 1.5rem;">✓</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Today's Status</div>
+            <div class="stat-value" id="todayStatus">Not Checked In</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h4>Leave Balance Overview</h4>
+            <p>Your current leave allocation</p>
+          </div>
+          <div style="height: 220px;">
+            <canvas id="leaveBalanceChart"></canvas>
+          </div>
+        </div>
+        
+        <div class="chart-card">
+          <div class="chart-header">
+            <h4>Monthly Attendance</h4>
+            <p>Attendance pattern this month</p>
+          </div>
+          <div style="height: 220px;">
+            <canvas id="attendanceChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leave Requests Section -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+          <h3 style="margin: 0;">My Leave Requests</h3>
+          <select id="statusFilter" class="form-control" style="width: 150px;" onchange="filterRequests()">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        
+        <div id="leaveRequestsList">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+
+      <!-- Recent Attendance Section -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <h3 style="margin-bottom: 1.25rem;">Recent Attendance</h3>
+        <div id="attendanceList">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Leave Request Modal -->
+  <div id="newLeaveModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeNewLeaveModal()">×</button>
+      <div class="modal-header">
+        <h3>New Leave Request</h3>
+        <p style="color: var(--gray-400); margin-top: 0.25rem;">Submit a new leave request</p>
+      </div>
+      
+      <div class="modal-body">
+        <form id="newLeaveForm">
+          <div class="form-group">
+            <label for="leaveType">Leave Type</label>
+            <select id="leaveType" class="form-control" required>
+              <option value="">Select leave type</option>
+              <option value="annual">Annual Leave</option>
+              <option value="sick">Sick Leave</option>
+              <option value="personal">Personal Leave</option>
+              <option value="emergency">Emergency Leave</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="startDate">Start Date</label>
+            <input type="date" id="startDate" class="form-control" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="endDate">End Date</label>
+            <input type="date" id="endDate" class="form-control" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="leaveReason">Reason</label>
+            <textarea id="leaveReason" class="form-control" required placeholder="Please provide a reason for your leave request..."></textarea>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" onclick="closeNewLeaveModal()" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Submit Request</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Details Modal -->
+  <div id="requestDetailsModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeRequestDetailsModal()">×</button>
+      <div class="modal-header">
+        <h3>Leave Request Details</h3>
+      </div>
+      
+      <div class="modal-body" id="requestDetailsContent">
+      </div>
+      
+      <div class="modal-footer">
+        <button onclick="closeRequestDetailsModal()" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <h4>Loading...</h4>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <div class="toast-icon">✓</div>
+    <div class="toast-content">
+      <h5>Success</h5>
+      <p>Action completed successfully</p>
+    </div>
+  </div>
+
+   <!-- Scripts -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leave.js"></script>
+  <script src="js/attendance.js"></script>
+    
+  <script>
+    let userProfile = null;
+    let leaveRequests = [];
+    let allRequests = [];
+    let leaveBalance = null;
+    let attendanceRecords = [];
+    let charts = {};
+    
+    async function initDashboard() {
+      const user = AuthModule.getCurrentUser();
+      userProfile = AuthModule.getUserProfile();
+      
+      if (!user) {
+        setTimeout(initDashboard, 500);
+        return;
+      }
+      
+      // Wait for profile if not loaded yet
+      if (!userProfile) {
+        // Wait a bit for profile to load
+        await new Promise(r => setTimeout(r, 500));
+        userProfile = AuthModule.getUserProfile();
+        if (!userProfile) {
+          setTimeout(initDashboard, 500);
+          return;
+        }
+      }
+      
+      document.getElementById('userName').textContent = userProfile.fullName;
+      document.getElementById('welcomeMessage').textContent = `Welcome back, ${userProfile.fullName}!`;
+      
+      await Promise.all([
+        loadLeaveBalance(),
+        loadLeaveRequests(),
+        loadAttendance(),
+        checkTodayAttendance()
+      ]);
+      
+      setTimeout(initCharts, 500);
+    }
+    
+    async function loadLeaveBalance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        leaveBalance = await LeaveModule.getLeaveBalance(user.uid);
+        
+        if (leaveBalance) {
+          const annual = (leaveBalance.annualLeave || 0) - (leaveBalance.usedAnnual || 0);
+          const sick = (leaveBalance.sickLeave || 0) - (leaveBalance.usedSick || 0);
+          const personal = (leaveBalance.personalLeave || 0) - (leaveBalance.usedPersonal || 0);
+          
+          document.getElementById('annualLeave').textContent = annual;
+          document.getElementById('sickLeave').textContent = sick;
+          document.getElementById('personalLeave').textContent = personal;
+        }
+      } catch (error) {
+        console.error('Error loading leave balance:', error);
+      }
+    }
+    
+    async function loadLeaveRequests() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        leaveRequests = await LeaveModule.getUserRequests(user.uid);
+        filterRequests();
+      } catch (error) {
+        console.error('Error loading leave requests:', error);
+      }
+    }
+    
+    async function loadAttendance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        attendanceRecords = await AttendanceModule.getUserAttendance(user.uid, 30);
+        renderAttendance();
+        calculateAttendanceRate();
+      } catch (error) {
+        console.error('Error loading attendance:', error);
+      }
+    }
+    
+    async function checkTodayAttendance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        const todayRecord = await AttendanceModule.getTodayAttendance(user.uid);
+        
+        const checkInBtn = document.getElementById('checkInBtn');
+        const checkOutBtn = document.getElementById('checkOutBtn');
+        const todayStatusEl = document.getElementById('todayStatus');
+        
+        if (todayRecord) {
+          if (checkInBtn) checkInBtn.style.display = 'none';
+          if (checkOutBtn) {
+            if (todayRecord.checkOutTime) {
+              checkOutBtn.style.display = 'none';
+              const hours = AttendanceModule.calculateWorkHours(todayRecord.checkInTime, todayRecord.checkOutTime);
+              if (todayStatusEl) todayStatusEl.textContent = `Out (${hours}hrs)`;
+              AuthModule.showToast(`Checked out at ${AttendanceModule.formatTime(todayRecord.checkOutTime)}. Total: ${hours} hours`, 'success');
+            } else {
+              checkOutBtn.style.display = 'inline-flex';
+              if (todayStatusEl) todayStatusEl.textContent = `In (${AttendanceModule.formatTime(todayRecord.checkInTime)})`;
+            }
+          }
+        } else {
+          if (checkInBtn) checkInBtn.style.display = 'inline-flex';
+          if (checkOutBtn) checkOutBtn.style.display = 'none';
+          if (todayStatusEl) todayStatusEl.textContent = 'Not Checked In';
+        }
+      } catch (error) {
+        console.error('Error checking attendance:', error);
+      }
+    }
+    
+    function calculateAttendanceRate() {
+      const rateEl = document.getElementById('attendanceRate');
+      if (attendanceRecords.length === 0) {
+        if (rateEl) rateEl.textContent = '0%';
+        return;
+      }
+      
+      const present = attendanceRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+      const rate = Math.round((present / attendanceRecords.length) * 100);
+      if (rateEl) rateEl.textContent = rate + '%';
+    }
+    
+    function filterRequests() {
+      const statusFilter = document.getElementById('statusFilter').value;
+      
+      allRequests = leaveRequests.filter(r => {
+        return statusFilter === 'all' || r.status === statusFilter;
+      });
+      
+      renderRequests();
+    }
+    
+    function renderRequests() {
+      const container = document.getElementById('leaveRequestsList');
+      
+      if (allRequests.length === 0) {
+        container.innerHTML = `
+          <div class="text-center" style="padding: 3rem;">
+            <p style="color: var(--gray-400); font-size: 1.1rem;">No leave requests</p>
+            <p style="color: var(--gray-500);">Submit your first leave request</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = allRequests.map(request => `
+        <div class="request-card">
+          <div class="request-header">
+            <div class="request-info">
+              <h4>${(request.leaveType || '').charAt(0).toUpperCase() + (request.leaveType || '').slice(1)} Leave</h4>
+              <p>${LeaveModule.formatDate(request.startDate)} - ${LeaveModule.formatDate(request.endDate)}</p>
+            </div>
+            <span class="status-badge status-${request.status}">${request.status}</span>
+          </div>
+          
+          <div class="request-details">
+            <div class="request-detail">
+              <div class="request-detail-label">Duration</div>
+              <div class="request-detail-value">${request.numberOfDays || 1} day(s)</div>
+            </div>
+            <div class="request-detail">
+              <div class="request-detail-label">Submitted</div>
+              <div class="request-detail-value">${LeaveModule.formatDate(request.requestDate)}</div>
+            </div>
+          </div>
+          
+          <div class="request-actions">
+            <button onclick="viewRequestDetails('${request.id}')" class="btn btn-secondary" style="padding: 0.5rem 1rem;">View Details</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function renderAttendance() {
+      const container = document.getElementById('attendanceList');
+      
+      if (attendanceRecords.length === 0) {
+        container.innerHTML = `
+          <div class="text-center" style="padding: 2rem;">
+            <p style="color: var(--gray-400);">No attendance records yet. Click "Check In" to start tracking.</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = `
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Hours</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attendanceRecords.slice(0, 10).map(record => {
+                const hours = AttendanceModule.calculateWorkHours(record.checkInTime, record.checkOutTime);
+                return `
+                  <tr>
+                    <td>${AttendanceModule.formatDate(record.date)}</td>
+                    <td>${AttendanceModule.formatTime(record.checkInTime)}</td>
+                    <td>${AttendanceModule.formatTime(record.checkOutTime) || '-'}</td>
+                    <td>${hours > 0 ? hours + ' hrs' : '-'}</td>
+                    <td><span class="status-badge status-${record.status}">${record.status}</span></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    function initCharts() {
+      if (typeof Chart === 'undefined') {
+        console.log('Chart.js not loaded yet, retrying...');
+        setTimeout(initCharts, 500);
+        return;
+      }
+      
+      const chartColors = {
+        gold: '#f59e0b',
+        cyan: '#06b6d4',
+        purple: '#8b5cf6',
+        green: '#10b981'
+      };
+      
+      // Leave Balance Chart
+      const annual = parseInt(document.getElementById('annualLeave').textContent) || 0;
+      const sick = parseInt(document.getElementById('sickLeave').textContent) || 0;
+      const personal = parseInt(document.getElementById('personalLeave').textContent) || 0;
+      
+      const ctx1 = document.getElementById('leaveBalanceChart');
+      if (ctx1) {
+        charts.leaveBalance = new Chart(ctx1.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels: ['Annual', 'Sick', 'Personal'],
+            datasets: [{
+              data: [annual, sick, personal],
+              backgroundColor: [chartColors.gold, chartColors.cyan, chartColors.purple],
+              borderColor: '#1b263b',
+              borderWidth: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12, font: { size: 11 } } }
+            }
+          }
+        });
+      }
+      
+      // Attendance Chart
+      const attendanceByDay = {};
+      attendanceRecords.slice(0, 14).forEach(record => {
+        const day = new Date(record.date?.toDate?.() || record.date).toLocaleDateString('en-US', { weekday: 'short' });
+        attendanceByDay[day] = (attendanceByDay[day] || 0) + 1;
+      });
+      
+      const ctx2 = document.getElementById('attendanceChart');
+      if (ctx2) {
+        charts.attendance = new Chart(ctx2.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: Object.keys(attendanceByDay),
+            datasets: [{
+              label: 'Days',
+              data: Object.values(attendanceByDay),
+              backgroundColor: chartColors.green,
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#9ca3af' }, grid: { display: false } },
+              y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+      }
+    }
+    
+    async function recordAttendance() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        if (!user) return;
+        await AttendanceModule.recordAttendance(user.uid);
+        await checkTodayAttendance();
+        await loadAttendance();
+      } catch (error) {
+        AuthModule.showToast('Error recording attendance', 'error');
+      }
+    }
+    
+    async function recordCheckout() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        await AttendanceModule.recordCheckout(user.uid);
+        await checkTodayAttendance();
+        await loadAttendance();
+      } catch (error) {
+        AuthModule.showToast('Error recording checkout', 'error');
+      }
+    }
+    
+    function showNewLeaveModal() {
+      document.getElementById('newLeaveModal').classList.add('active');
+    }
+    
+    function closeNewLeaveModal() {
+      document.getElementById('newLeaveModal').classList.remove('active');
+      document.getElementById('newLeaveForm').reset();
+    }
+    
+    document.getElementById('newLeaveForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const requestData = {
+        leaveType: document.getElementById('leaveType').value,
+        startDate: document.getElementById('startDate').value,
+        endDate: document.getElementById('endDate').value,
+        reason: document.getElementById('leaveReason').value
+      };
+      
+      try {
+        await LeaveModule.submitRequest(requestData);
+        closeNewLeaveModal();
+        await loadLeaveRequests();
+        AuthModule.showToast('Leave request submitted successfully', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error submitting leave request', 'error');
+      }
+    });
+    
+    function viewRequestDetails(requestId) {
+      const request = leaveRequests.find(r => r.id === requestId);
+      if (!request) return;
+      
+      const content = `
+        <div style="display: grid; gap: 1.25rem;">
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Leave Type</h4>
+            <p>${(request.leaveType || '').charAt(0).toUpperCase() + (request.leaveType || '').slice(1)} Leave</p>
+          </div>
+          
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Duration</h4>
+            <p>${LeaveModule.formatDate(request.startDate)} - ${LeaveModule.formatDate(request.endDate)}</p>
+            <p>${request.numberOfDays || 1} day(s)</p>
+          </div>
+          
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Reason</h4>
+            <p>${request.reason || 'Not provided'}</p>
+          </div>
+          
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Status</h4>
+            <span class="status-badge status-${request.status}">${request.status}</span>
+          </div>
+          
+          ${request.reviewedByName ? `
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Reviewed By</h4>
+            <p>${request.reviewedByName} on ${LeaveModule.formatDate(request.reviewedAt)}</p>
+          </div>
+          ` : ''}
+          
+          ${request.comments ? `
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Comments</h4>
+            <p>${request.comments}</p>
+          </div>
+          ` : ''}
+        </div>
+      `;
+      
+      document.getElementById('requestDetailsContent').innerHTML = content;
+      document.getElementById('requestDetailsModal').classList.add('active');
+    }
+    
+    function closeRequestDetailsModal() {
+      document.getElementById('requestDetailsModal').classList.remove('active');
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('startDate').min = today;
+    document.getElementById('endDate').min = today;
+    
+    document.getElementById('startDate').addEventListener('change', (e) => {
+      document.getElementById('endDate').min = e.target.value;
+    });
+    
+    // Call initDashboard after a short delay to ensure all modules are loaded
+    setTimeout(initDashboard, 500);
+  </script>
+</body>
+</html>

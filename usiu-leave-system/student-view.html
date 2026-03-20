@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Availability - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <div class="brand" onclick="location.href='index.html'" style="cursor:pointer;">
+          <div class="brand-logo">U</div>
+          <div class="brand-text"><h1>USIU-Africa</h1><p>Staff Availability</p></div>
+        </div>
+        <div class="nav-links">
+          <a href="login.html" class="btn btn-secondary" style="padding: 0.5rem 1rem; text-decoration: none;">Staff Login</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <div>
+          <h2>Staff Availability</h2>
+          <p>Check if staff members are available on campus</p>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="margin-top: 1.5rem;">
+        <div class="stat-card">
+          <div class="stat-icon green"><span style="font-size: 1.5rem;">👥</span></div>
+          <div class="stat-content"><div class="stat-label">Total Staff</div><div class="stat-value" id="totalStaff">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%); color: #fff;"><span style="font-size: 1.5rem;">✓</span></div>
+          <div class="stat-content"><div class="stat-label">Available</div><div class="stat-value" id="availableCount">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444 0%, #f87171 100%); color: #fff;"><span style="font-size: 1.5rem;">✕</span></div>
+          <div class="stat-content"><div class="stat-label">On Leave</div><div class="stat-value" id="onLeaveCount">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #eab308 0%, #facc15 100%); color: #000;"><span style="font-size: 1.5rem;">◐</span></div>
+          <div class="stat-content"><div class="stat-label">Out of Office</div><div class="stat-value" id="outOfficeCount">0</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+          <h3 style="margin: 0;">Staff Directory</h3>
+          <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by name or department..." style="width: 250px;" oninput="filterStaff()">
+            <select id="statusFilter" class="form-control" style="width: 150px;" onchange="filterStaff()">
+              <option value="all">All Status</option>
+              <option value="available">Available</option>
+              <option value="on-leave">On Leave</option>
+              <option value="out-office">Out of Office</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: #22c55e;"></div>
+            <span style="color: var(--gray-300); font-size: 0.9rem;">Available</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></div>
+            <span style="color: var(--gray-300); font-size: 0.9rem;">On Leave</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: #eab308;"></div>
+            <span style="color: var(--gray-300); font-size: 0.9rem;">Out of Office</span>
+          </div>
+        </div>
+
+        <div id="staffGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeInfoModal()">×</button>
+      <div class="modal-header"><h3 id="modalStaffName">Staff Details</h3></div>
+      <div class="modal-body" id="modalContent"></div>
+      <div class="modal-footer"><button onclick="closeInfoModal()" class="btn btn-secondary">Close</button></div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content"><div class="loading-spinner"></div><h4>Loading staff...</h4></div>
+  </div>
+
+  <script>
+    const db = firebase.firestore();
+    let allStaff = [];
+
+    async function init() {
+      await loadStaff();
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    async function loadStaff() {
+      try {
+        const usersSnap = await db.collection('users').get();
+        const requestsSnap = await db.collection('leave_requests').get();
+        
+        const requests = requestsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const onLeaveUsers = new Set();
+        requests.forEach(r => {
+          if (r.status !== 'approved') return;
+          const start = r.startDate?.toDate ? r.startDate.toDate() : new Date(r.startDate);
+          const end = r.endDate?.toDate ? r.endDate.toDate() : new Date(r.endDate);
+          if (start <= today && end >= today) {
+            onLeaveUsers.add(r.userId);
+          }
+        });
+        
+        const staffRoles = ['staff', 'hr', 'academics', 'administration', 'finance', 'library', 'marketing', 'it'];
+        allStaff = usersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => staffRoles.includes(u.role))
+          .map(u => ({
+            ...u,
+            status: onLeaveUsers.has(u.id) ? 'on-leave' : 
+                   (u.currentStatus === 'out-office' ? 'out-office' : 'available'),
+            officeHours: u.officeHours || '8:00 AM - 5:00 PM',
+            building: u.building || 'Main Campus',
+            office: u.office || 'TBD'
+          }));
+        
+        updateCounts();
+        renderStaff();
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('staffGrid').innerHTML = '<p class="text-center" style="padding: 3rem; color: var(--gray-400);">Unable to load staff data. Please refresh.</p>';
+      }
+    }
+
+    function updateCounts() {
+      document.getElementById('totalStaff').textContent = allStaff.length;
+      document.getElementById('availableCount').textContent = allStaff.filter(s => s.status === 'available').length;
+      document.getElementById('onLeaveCount').textContent = allStaff.filter(s => s.status === 'on-leave').length;
+      document.getElementById('outOfficeCount').textContent = allStaff.filter(s => s.status === 'out-office').length;
+    }
+
+    function filterStaff() {
+      renderStaff();
+    }
+
+    function renderStaff() {
+      const container = document.getElementById('staffGrid');
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+      
+      let filtered = allStaff;
+      
+      if (status !== 'all') {
+        filtered = filtered.filter(s => s.status === status);
+      }
+      
+      if (search) {
+        filtered = filtered.filter(s => 
+          (s.fullName || s.name || '').toLowerCase().includes(search) ||
+          (s.department || '').toLowerCase().includes(search)
+        );
+      }
+      
+      if (filtered.length === 0) {
+        container.innerHTML = '<p class="text-center" style="padding: 3rem; color: var(--gray-400);">No staff members found</p>';
+        return;
+      }
+      
+      container.innerHTML = `<div class="table-container"><table>
+        <thead>
+          <tr>
+            <th>Staff Member</th>
+            <th>Department</th>
+            <th>Status</th>
+            <th>Office Hours</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map(staff => {
+            const name = staff.fullName || staff.name || 'Unknown';
+            const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const dept = staff.department ? staff.department.charAt(0).toUpperCase() + staff.department.slice(1) : 'General';
+            
+            let statusBadge = '';
+            let statusColor = '';
+            if (staff.status === 'available') {
+              statusBadge = '<span class="status-badge status-approved">✓ Available</span>';
+              statusColor = '#22c55e';
+            } else if (staff.status === 'on-leave') {
+              statusBadge = '<span class="status-badge status-rejected">✕ On Leave</span>';
+              statusColor = '#ef4444';
+            } else {
+              statusBadge = '<span class="status-badge status-pending">◐ Out of Office</span>';
+              statusColor = '#eab308';
+            }
+            
+            return `<tr>
+              <td>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: ${statusColor}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem; color: white;">
+                    ${initials}
+                  </div>
+                  <span style="font-weight: 500;">${name}</span>
+                </div>
+              </td>
+              <td>${dept}</td>
+              <td>${statusBadge}</td>
+              <td>${staff.officeHours}</td>
+              <td>
+                <button onclick="showStaffInfo('${staff.id}')" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                  View Info
+                </button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+    }
+
+    function showStaffInfo(id) {
+      const staff = allStaff.find(s => s.id === id);
+      if (!staff) return;
+      
+      const name = staff.fullName || staff.name || 'Unknown';
+      const dept = staff.department ? staff.department.charAt(0).toUpperCase() + staff.department.slice(1) : 'General';
+      
+      let statusText = 'Available';
+      let statusColor = '#22c55e';
+      if (staff.status === 'on-leave') {
+        statusText = 'On Leave';
+        statusColor = '#ef4444';
+      } else if (staff.status === 'out-office') {
+        statusText = 'Out of Office';
+        statusColor = '#eab308';
+      }
+      
+      document.getElementById('modalStaffName').textContent = name;
+      document.getElementById('modalContent').innerHTML = `
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background: ${statusColor}; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 600; color: white;">
+            ${name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.25rem;">${name}</h4>
+            <p style="color: var(--gray-400); margin: 0;">${dept}</p>
+            <span class="status-badge" style="background: ${statusColor}20; color: ${statusColor}; margin-top: 0.5rem; display: inline-block;">
+              ${statusText}
+            </span>
+          </div>
+        </div>
+        <div style="display: grid; gap: 1rem;">
+          <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
+            <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Office Hours</div>
+            <div style="font-weight: 500;">${staff.officeHours}</div>
+          </div>
+          <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
+            <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Building</div>
+            <div style="font-weight: 500;">${staff.building}</div>
+          </div>
+          <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
+            <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Office</div>
+            <div style="font-weight: 500;">${staff.office}</div>
+          </div>
+          ${staff.email ? `
+          <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
+            <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Email</div>
+            <div style="font-weight: 500;">${staff.email}</div>
+          </div>
+          ` : ''}
+        </div>
+      `;
+      document.getElementById('infoModal').classList.add('active');
+    }
+
+    function closeInfoModal() {
+      document.getElementById('infoModal').classList.remove('active');
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

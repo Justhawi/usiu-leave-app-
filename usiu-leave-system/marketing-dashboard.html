@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketing Dashboard - USIU Leave Management</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBCmRqBfj779dJn6IjuBTuO-iyeZV6T0-Y",
+      authDomain: "leave-usiu.firebaseapp.com",
+      projectId: "leave-usiu",
+      storageBucket: "leave-usiu.firebasestorage.app",
+      messagingSenderId: "128310563589",
+      appId: "1:128310563589:web:5f58c3f13a7fd8710add6c"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <div class="brand">
+          <div class="brand-logo">U</div>
+          <div class="brand-text"><h1>USIU-Africa</h1><p>Marketing</p></div>
+        </div>
+        <div class="nav-links">
+          <span id="userName" style="color: var(--white); font-weight: 600;"></span>
+          <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <div>
+          <h2>Marketing Department Head</h2>
+          <p>Manage leave requests and ensure campaigns and deadlines are not affected</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button onclick="showSection('requests')" class="btn btn-primary" id="btn-requests">Leave Requests</button>
+          <button onclick="showSection('team')" class="btn btn-secondary" id="btn-team">Team Availability</button>
+          <button onclick="showSection('calendar')" class="btn btn-secondary" id="btn-calendar">Campaign Calendar</button>
+          <button onclick="showSection('reports')" class="btn btn-secondary" id="btn-reports">Workload Reports</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-top: 1.5rem;">
+        <div class="stat-card">
+          <div class="stat-icon gold"><span style="font-size: 1.5rem;">📋</span></div>
+          <div class="stat-content"><div class="stat-label">Pending Review</div><div class="stat-value" id="pendingRequests">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><span style="font-size: 1.5rem;">👥</span></div>
+          <div class="stat-content"><div class="stat-label">Team Size</div><div class="stat-value" id="teamSize">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue"><span style="font-size: 1.5rem;">✓</span></div>
+          <div class="stat-content"><div class="stat-label">Available Now</div><div class="stat-value" id="availableNow">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%); color: white;"><span style="font-size: 1.5rem;">📅</span></div>
+          <div class="stat-content"><div class="stat-label">On Leave Today</div><div class="stat-value" id="onLeaveToday">0</div></div>
+        </div>
+      </div>
+
+      <!-- Leave Requests Section -->
+      <div id="section-requests" class="section">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="margin-bottom: 1rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+            <p style="margin: 0; color: var(--gold-400); font-weight: 600;">📋 Review and approve/reject marketing team leave requests</p>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="margin: 0;">Marketing Team Requests</h3>
+            <select id="statusFilter" class="form-control" style="width: 150px;" onchange="renderRequests()">
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div id="requestsList"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Team Availability Section -->
+      <div id="section-team" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="margin-bottom: 1rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+            <p style="margin: 0; color: var(--gold-400); font-weight: 600;">👥 Monitor team availability for planning workload distribution</p>
+          </div>
+          <div id="teamAvailability"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Campaign Calendar Section -->
+      <div id="section-calendar" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="margin-bottom: 1rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+            <p style="margin: 0; color: var(--gold-400); font-weight: 600;">📅 Plan around ongoing marketing activities and campaigns</p>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="margin: 0;">Leave & Campaign Calendar</h3>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+              <button onclick="changeMonth(-1)" class="btn btn-secondary">←</button>
+              <span id="currentMonth" style="font-weight: 600; min-width: 150px; text-align: center;"></span>
+              <button onclick="changeMonth(1)" class="btn btn-secondary">→</button>
+            </div>
+          </div>
+          <div id="calendarView"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Workload Reports Section -->
+      <div id="section-reports" class="section" style="display: none;">
+        <div class="card" style="margin-top: 1.5rem;">
+          <div style="margin-bottom: 1rem; padding: 1rem; background: var(--gray-800); border-radius: 0.5rem;">
+            <p style="margin: 0; color: var(--gold-400); font-weight: 600;">📈 Analyze workload distribution and maintain productivity</p>
+          </div>
+          <div id="reportsContent"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Banner -->
+  <div id="alertBanner" style="display: none; position: fixed; top: 70px; right: 20px; background: #ef4444; color: white; padding: 1rem 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span style="font-size: 1.5rem;">⚠️</span>
+      <div><strong>Alert:</strong> <span id="alertText"></span></div>
+    </div>
+  </div>
+
+  <div id="actionModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <div class="modal-header"><h3 id="modalTitle">Review Request</h3></div>
+      <div class="modal-body" id="modalContent"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay"><div class="loading-content"><div class="loading-spinner"></div><h4>Loading...</h4></div></div>
+  <div id="toast" class="toast"><div class="toast-icon">✓</div><div class="toast-content"><h5>Success</h5><p>Action completed</p></div></div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/leave.js"></script>
+  <script src="js/attendance.js"></script>
+  
+  <script>
+    const DEPARTMENT = 'marketing';
+    let allRequests = [];
+    let allUsers = [];
+    let currentMonth = new Date();
+
+    async function init() {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      if (!user || !profile) { setTimeout(init, 500); return; }
+      document.getElementById('userName').textContent = profile.fullName;
+      await loadData();
+      checkAlerts();
+    }
+
+    async function loadData() {
+      try {
+        const db = firebase.firestore();
+        const [requestsSnap, usersSnap] = await Promise.all([
+          db.collection('leave_requests').where('department', '==', DEPARTMENT).get(),
+          db.collection('users').get()
+        ]);
+        allRequests = requestsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(u => u.department === DEPARTMENT);
+        
+        updateStats();
+        renderRequests();
+        renderTeamAvailability();
+        renderCalendar();
+        generateReports();
+      } catch (error) { console.error('Error:', error); }
+    }
+
+    function updateStats() {
+      const pending = allRequests.filter(r => r.status === 'pending').length;
+      document.getElementById('pendingRequests').textContent = pending;
+      document.getElementById('teamSize').textContent = allUsers.length;
+      
+      const today = new Date(); today.setHours(0,0,0,0);
+      const onLeave = allRequests.filter(r => {
+        if (r.status !== 'approved') return false;
+        const start = r.startDate?.toDate ? r.startDate.toDate() : new Date(r.startDate);
+        const end = r.endDate?.toDate ? r.endDate.toDate() : new Date(r.endDate);
+        return start <= today && end >= today;
+      }).length;
+      document.getElementById('onLeaveToday').textContent = onLeave;
+      document.getElementById('availableNow').textContent = allUsers.length - onLeave;
+    }
+
+    function showSection(section) {
+      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+      document.getElementById(`section-${section}`).style.display = 'block';
+      document.querySelectorAll('.page-header .btn').forEach(b => b.className = b.className.replace('btn-primary', 'btn-secondary'));
+      document.getElementById(`btn-${section}`).className = document.getElementById(`btn-${section}`).className.replace('btn-secondary', 'btn-primary');
+    }
+
+    function renderRequests() {
+      const container = document.getElementById('requestsList');
+      const filter = document.getElementById('statusFilter').value;
+      const filtered = filter === 'all' ? allRequests : allRequests.filter(r => r.status === filter);
+      
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center" style="padding: 3rem;"><p style="color: var(--gray-400);">No requests found</p></div>';
+        return;
+      }
+      
+      container.innerHTML = filtered.map(r => `
+        <div class="request-card">
+          <div class="request-header">
+            <div class="request-info"><h4>${r.staffName || 'Unknown'}</h4><p>${r.employeeId || 'N/A'}</p></div>
+            <span class="status-badge status-${r.status}">${r.status}</span>
+          </div>
+          <div class="request-details">
+            <div class="request-detail"><div class="request-detail-label">Type</div><div class="request-detail-value">${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</div></div>
+            <div class="request-detail"><div class="request-detail-label">Start</div><div class="request-detail-value">${LeaveModule.formatDate(r.startDate)}</div></div>
+            <div class="request-detail"><div class="request-detail-label">End</div><div class="request-detail-value">${LeaveModule.formatDate(r.endDate)}</div></div>
+            <div class="request-detail"><div class="request-detail-label">Days</div><div class="request-detail-value">${r.numberOfDays || 1}</div></div>
+          </div>
+          <div class="request-actions">
+            ${r.status === 'pending' ? `
+              <button onclick="review('${r.id}', 'approve')" class="btn btn-success">Approve</button>
+              <button onclick="review('${r.id}', 'reject')" class="btn btn-danger">Reject</button>
+            ` : ''}
+            <button onclick="viewDetails('${r.id}')" class="btn btn-secondary">Details</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function review(id, action) {
+      const r = allRequests.find(x => x.id === id);
+      document.getElementById('modalTitle').textContent = action === 'approve' ? 'Approve Request' : 'Reject Request';
+      document.getElementById('modalContent').innerHTML = `
+        <div style="margin-bottom: 1.5rem;">
+          <h4 style="color: var(--gold-400);">${r.staffName || 'Unknown'}</h4>
+          <p>${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)} Leave</p>
+          <p style="color: var(--gray-400);">${LeaveModule.formatDate(r.startDate)} - ${LeaveModule.formatDate(r.endDate)} (${r.numberOfDays || 1} days)</p>
+          <p style="color: var(--gray-400);">Reason: ${r.reason || 'Not provided'}</p>
+        </div>
+        <div class="form-group"><label>Comments</label><textarea id="comments" class="form-control" placeholder="Add comments..."></textarea></div>
+      `;
+      document.getElementById('modalFooter').innerHTML = `
+        <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
+        <button onclick="confirmReview('${id}', '${action}')" class="btn btn-${action === 'approve' ? 'success' : 'danger'}">Confirm</button>
+      `;
+      document.getElementById('actionModal').classList.add('active');
+    }
+
+    async function confirmReview(id, action) {
+      const comments = document.getElementById('comments').value;
+      try {
+        await LeaveModule.updateRequestStatus(id, action === 'approve' ? 'approved' : 'rejected', comments);
+        closeModal();
+        await loadData();
+        showToast(`Request ${action === 'approve' ? 'approved' : 'rejected'}`, 'success');
+      } catch (error) { showToast('Error updating request', 'error'); }
+    }
+
+    function viewDetails(id) {
+      const r = allRequests.find(x => x.id === id);
+      document.getElementById('modalTitle').textContent = 'Request Details';
+      document.getElementById('modalContent').innerHTML = `
+        <div style="display: grid; gap: 1rem;">
+          <div><h4 style="color: var(--gold-400);">Staff</h4><p>${r.staffName || 'Unknown'} (${r.employeeId || 'N/A'})</p></div>
+          <div><h4 style="color: var(--gold-400);">Leave Details</h4><p>Type: ${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</p><p>Duration: ${LeaveModule.formatDate(r.startDate)} - ${LeaveModule.formatDate(r.endDate)}</p><p>Days: ${r.numberOfDays || 1}</p><p>Reason: ${r.reason || 'Not provided'}</p></div>
+          <div><h4 style="color: var(--gold-400);">Status</h4><span class="status-badge status-${r.status}">${r.status}</span></div>
+        </div>
+      `;
+      document.getElementById('modalFooter').innerHTML = '<button onclick="closeModal()" class="btn btn-secondary">Close</button>';
+      document.getElementById('actionModal').classList.add('active');
+    }
+
+    function closeModal() { document.getElementById('actionModal').classList.remove('active'); }
+
+    function renderTeamAvailability() {
+      const container = document.getElementById('teamAvailability');
+      const today = new Date(); today.setHours(0,0,0,0);
+      
+      const teamWithStatus = allUsers.map(u => {
+        const onLeave = allRequests.find(r => {
+          if (r.userId !== u.id || r.status !== 'approved') return false;
+          const start = r.startDate?.toDate ? r.startDate.toDate() : new Date(r.startDate);
+          const end = r.endDate?.toDate ? r.endDate.toDate() : new Date(r.endDate);
+          return start <= today && end >= today;
+        });
+        return { ...u, onLeave };
+      });
+      
+      container.innerHTML = `<div class="table-container"><table><thead><tr><th>Staff</th><th>Status</th><th>Current Leave</th></tr></thead><tbody>
+        ${teamWithStatus.map(u => `
+          <tr>
+            <td>${u.fullName || u.name || 'Unknown'}</td>
+            <td><span class="status-badge status-${u.onLeave ? 'rejected' : 'approved'}">${u.onLeave ? 'On Leave' : 'Available'}</span></td>
+            <td>${u.onLeave ? `${LeaveModule.formatDate(u.onLeave.startDate)} - ${LeaveModule.formatDate(u.onLeave.endDate)}` : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody></table></div>`;
+    }
+
+    function renderCalendar() {
+      const container = document.getElementById('calendarView');
+      const month = currentMonth.getMonth();
+      const year = currentMonth.getFullYear();
+      document.getElementById('currentMonth').textContent = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const approved = allRequests.filter(r => r.status === 'approved');
+      
+      let html = '<div class="table-container"><table style="width: 100%;"><thead><tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead><tbody><tr>';
+      
+      for (let i = 0; i < firstDay; i++) html += '<td style="padding: 0.5rem;"></td>';
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const onLeave = approved.filter(r => {
+          const start = r.startDate?.toDate ? r.startDate.toDate() : new Date(r.startDate);
+          const end = r.endDate?.toDate ? r.endDate.toDate() : new Date(r.endDate);
+          return start <= date && end >= date;
+        });
+        
+        const isToday = new Date().toDateString() === date.toDateString();
+        html += `<td style="padding: 0.5rem; vertical-align: top; ${isToday ? 'background: var(--gold-500); color: #000;' : ''}">
+          <div style="font-weight: 600;">${day}</div>
+          ${onLeave.map(r => `<div style="font-size: 0.7rem; background: #8b5cf6; padding: 0.2rem 0.3rem; margin-top: 0.2rem; border-radius: 0.25rem;">${r.staffName || 'Staff'}</div>`).join('')}
+        </td>`;
+        
+        if ((firstDay + day) % 7 === 0) html += '</tr><tr>';
+      }
+      
+      html += '</tr></tbody></table></div>';
+      container.innerHTML = html;
+    }
+
+    function changeMonth(delta) {
+      currentMonth.setMonth(currentMonth.getMonth() + delta);
+      renderCalendar();
+    }
+
+    function generateReports() {
+      const container = document.getElementById('reportsContent');
+      const approved = allRequests.filter(r => r.status === 'approved');
+      const pending = allRequests.filter(r => r.status === 'pending');
+      
+      const byType = {};
+      allRequests.forEach(r => { byType[r.leaveType] = (byType[r.leaveType] || 0) + 1; });
+      
+      const avgDays = allRequests.length ? (allRequests.reduce((sum, r) => sum + (r.numberOfDays || 1), 0) / allRequests.length).toFixed(1) : 0;
+      
+      container.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+          <div style="padding: 1.5rem; background: var(--gray-800); border-radius: 0.75rem; text-align: center;">
+            <h4 style="color: var(--gold-400);">Team Members</h4><p style="font-size: 2rem; font-weight: bold; margin: 0;">${allUsers.length}</p>
+          </div>
+          <div style="padding: 1.5rem; background: var(--gray-800); border-radius: 0.75rem; text-align: center;">
+            <h4 style="color: var(--gold-400);">Pending Requests</h4><p style="font-size: 2rem; font-weight: bold; margin: 0;">${pending.length}</p>
+          </div>
+          <div style="padding: 1.5rem; background: var(--gray-800); border-radius: 0.75rem; text-align: center;">
+            <h4 style="color: var(--gold-400);">Avg Days/Request</h4><p style="font-size: 2rem; font-weight: bold; margin: 0;">${avgDays}</p>
+          </div>
+        </div>
+        <h4 style="margin-bottom: 1rem;">Leave Distribution by Type</h4>
+        <div class="table-container"><table><thead><tr><th>Type</th><th>Count</th><th>Percentage</th></tr></thead><tbody>
+          ${Object.entries(byType).map(([type, count]) => `<tr><td>${type.charAt(0).toUpperCase() + type.slice(1)}</td><td>${count}</td><td>${Math.round(count / allRequests.length * 100)}%</td></tr>`).join('')}
+        </tbody></table></div>
+      `;
+    }
+
+    function checkAlerts() {
+      const pending = allRequests.filter(r => r.status === 'pending').length;
+      if (pending > 0) {
+        const banner = document.getElementById('alertBanner');
+        document.getElementById('alertText').textContent = `${pending} request(s) need your review`;
+        banner.style.display = 'block';
+        setTimeout(() => banner.style.display = 'none', 8000);
+      }
+    }
+
+    function showToast(msg, type = 'info') {
+      const t = document.getElementById('toast');
+      t.querySelector('p').textContent = msg;
+      t.className = `toast ${type}`;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1000));
+  </script>
+</body>
+</html>
