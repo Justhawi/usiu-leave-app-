@@ -256,7 +256,47 @@ const AuthModule = {
     };
     return messages[code] || error.message || 'An error occurred';
   },
-  
+
+  // Notifications
+  async createNotification(notificationData) {
+    try {
+      const db = firebase.firestore();
+      await db.collection('notifications').add({
+        ...notificationData,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (error) {
+      console.log('Error creating notification:', error);
+    }
+  },
+
+  async getNotifications(userId) {
+    try {
+      const db = firebase.firestore();
+      const snapshot = await db.collection('notifications')
+        .where('userId', '==', userId)
+        .orderBy('timestamp', 'desc')
+        .limit(20)
+        .get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.log('Error getting notifications:', error);
+      return [];
+    }
+  },
+
+  async markNotificationRead(notificationId) {
+    try {
+      const db = firebase.firestore();
+      await db.collection('notifications').doc(notificationId).update({
+        read: true
+      });
+    } catch (error) {
+      console.log('Error marking notification read:', error);
+    }
+  },
+
   showLoading(show) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {

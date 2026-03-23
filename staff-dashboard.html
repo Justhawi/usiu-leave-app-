@@ -40,6 +40,9 @@
           </div>
         </div>
         <div class="nav-links">
+          <button onclick="toggleDarkMode()" class="btn btn-secondary" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; margin-right: 0.5rem;" title="Toggle Dark Mode">
+            <span id="themeIcon">🌙</span>
+          </button>
           <span id="userName" style="color: var(--white); font-weight: 600; font-size: 0.95rem;"></span>
           <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Logout</button>
         </div>
@@ -180,6 +183,9 @@
               <option value="annual">Annual Leave</option>
               <option value="sick">Sick Leave</option>
               <option value="personal">Personal Leave</option>
+              <option value="maternity">Maternity Leave</option>
+              <option value="paternity">Paternity Leave</option>
+              <option value="unpaid">Unpaid Leave</option>
               <option value="emergency">Emergency Leave</option>
             </select>
           </div>
@@ -221,6 +227,53 @@
       
       <div class="modal-footer">
         <button onclick="closeRequestDetailsModal()" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Leave Modal -->
+  <div id="editLeaveModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeEditModal()">×</button>
+      <div class="modal-header">
+        <h3>Edit Leave Request</h3>
+      </div>
+      
+      <div class="modal-body">
+        <input type="hidden" id="editRequestId">
+        
+        <div class="form-group">
+          <label for="editLeaveType">Leave Type</label>
+          <select id="editLeaveType" class="form-control" required>
+            <option value="annual">Annual Leave</option>
+            <option value="sick">Sick Leave</option>
+            <option value="personal">Personal Leave</option>
+            <option value="maternity">Maternity Leave</option>
+            <option value="paternity">Paternity Leave</option>
+            <option value="unpaid">Unpaid Leave</option>
+            <option value="emergency">Emergency Leave</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="editStartDate">Start Date</label>
+          <input type="date" id="editStartDate" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="editEndDate">End Date</label>
+          <input type="date" id="editEndDate" class="form-control" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="editLeaveReason">Reason</label>
+          <textarea id="editLeaveReason" class="form-control" required placeholder="Please provide a reason..."></textarea>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button onclick="closeEditModal()" class="btn btn-secondary">Cancel</button>
+        <button onclick="saveEditedRequest()" class="btn btn-primary">Save Changes</button>
       </div>
     </div>
   </div>
@@ -418,6 +471,10 @@
           </div>
           
           <div class="request-actions">
+            ${request.status === 'pending' ? `
+              <button onclick="editLeaveRequest('${request.id}')" class="btn btn-primary" style="padding: 0.5rem 1rem;">Edit</button>
+              <button onclick="cancelLeaveRequest('${request.id}')" class="btn btn-danger" style="padding: 0.5rem 1rem;">Cancel</button>
+            ` : ''}
             <button onclick="viewRequestDetails('${request.id}')" class="btn btn-secondary" style="padding: 0.5rem 1rem;">View Details</button>
           </div>
         </div>
@@ -645,6 +702,74 @@
       document.getElementById('requestDetailsModal').classList.remove('active');
     }
     
+    async function editLeaveRequest(requestId) {
+      const request = leaveRequests.find(r => r.id === requestId);
+      if (!request || request.status !== 'pending') return;
+      
+      document.getElementById('editRequestId').value = requestId;
+      document.getElementById('editLeaveType').value = request.leaveType;
+      document.getElementById('editStartDate').value = request.startDate?.toDate ? request.startDate.toDate().toISOString().split('T')[0] : request.startDate;
+      document.getElementById('editEndDate').value = request.endDate?.toDate ? request.endDate.toDate().toISOString().split('T')[0] : request.endDate;
+      document.getElementById('editLeaveReason').value = request.reason;
+      document.getElementById('editLeaveModal').classList.add('active');
+    }
+    
+    function closeEditModal() {
+      document.getElementById('editLeaveModal').classList.remove('active');
+    }
+    
+    async function saveEditedRequest() {
+      const requestId = document.getElementById('editRequestId').value;
+      const leaveType = document.getElementById('editLeaveType').value;
+      const startDate = document.getElementById('editStartDate').value;
+      const endDate = document.getElementById('editEndDate').value;
+      const reason = document.getElementById('editLeaveReason').value;
+      
+      if (!leaveType || !startDate || !endDate || !reason) {
+        AuthModule.showToast('Please fill all fields', 'error');
+        return;
+      }
+      
+      try {
+        const db = firebase.firestore();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        
+        await db.collection('leave_requests').doc(requestId).update({
+          leaveType: leaveType,
+          startDate: firebase.firestore.Timestamp.fromDate(start),
+          endDate: firebase.firestore.Timestamp.fromDate(end),
+          numberOfDays: days,
+          reason: reason,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        closeEditModal();
+        await loadLeaveRequests();
+        AuthModule.showToast('Leave request updated successfully!', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error updating request', 'error');
+      }
+    }
+    
+    async function cancelLeaveRequest(requestId) {
+      if (!confirm('Are you sure you want to cancel this leave request?')) return;
+      
+      try {
+        const db = firebase.firestore();
+        await db.collection('leave_requests').doc(requestId).update({
+          status: 'cancelled',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await loadLeaveRequests();
+        AuthModule.showToast('Leave request cancelled', 'success');
+      } catch (error) {
+        AuthModule.showToast('Error cancelling request', 'error');
+      }
+    }
+    
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('startDate').min = today;
     document.getElementById('endDate').min = today;
@@ -652,6 +777,29 @@
     document.getElementById('startDate').addEventListener('change', (e) => {
       document.getElementById('endDate').min = e.target.value;
     });
+    
+    // Dark Mode Toggle
+    function toggleDarkMode() {
+      const html = document.documentElement;
+      const icon = document.getElementById('themeIcon');
+      
+      if (html.getAttribute('data-theme') === 'dark') {
+        html.setAttribute('data-theme', 'light');
+        icon.textContent = '🌙';
+        localStorage.setItem('theme', 'light');
+      } else {
+        html.setAttribute('data-theme', 'dark');
+        icon.textContent = '☀️';
+        localStorage.setItem('theme', 'dark');
+      }
+    }
+    
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.getElementById('themeIcon').textContent = '☀️';
+    }
     
     // Call initDashboard after a short delay to ensure all modules are loaded
     setTimeout(initDashboard, 500);

@@ -342,7 +342,10 @@
         <div class="card" style="margin-top: 1.5rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
             <h3 style="margin: 0;">Staffing Analysis</h3>
-            <button onclick="generateReport()" class="btn btn-primary">Generate Report</button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button onclick="generateReport()" class="btn btn-primary">Generate Report</button>
+              <button onclick="exportToCSV()" class="btn btn-success">Export to CSV</button>
+            </div>
           </div>
           <div id="reportContent">
             <p style="color: var(--gray-400);">Click "Generate Report" to view staffing analysis and leave trends.</p>
@@ -936,7 +939,7 @@
         options: { responsive: true, maintainAspectRatio: false }
       });
       
-      const types = ['annual', 'sick', 'personal', 'emergency'];
+      const types = ['annual', 'sick', 'personal', 'maternity', 'paternity', 'unpaid', 'emergency'];
       const typeCounts = types.map(t => allRequests.filter(r => r.leaveType === t).length);
       
       if (charts.type) charts.type.destroy();
@@ -1028,6 +1031,42 @@
           </div>
         ` : ''}
       `;
+    }
+    
+    function exportToCSV() {
+      if (allRequests.length === 0) {
+        AuthModule.showToast('No data to export', 'error');
+        return;
+      }
+      
+      const headers = ['Staff Name', 'Email', 'Employee ID', 'Department', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status', 'Request Date'];
+      const rows = allRequests.map(r => {
+        const startDate = r.startDate?.toDate ? r.startDate.toDate().toLocaleDateString() : '-';
+        const endDate = r.endDate?.toDate ? r.endDate.toDate().toLocaleDateString() : '-';
+        const requestDate = r.requestDate?.toDate ? r.requestDate.toDate().toLocaleDateString() : '-';
+        
+        return [
+          r.staffName || '',
+          r.email || '',
+          r.employeeId || '',
+          r.department || '',
+          (r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1),
+          startDate,
+          endDate,
+          r.numberOfDays || 1,
+          r.status || '',
+          requestDate
+        ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+      });
+      
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `leave_report_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      
+      AuthModule.showToast('Report exported successfully!', 'success');
     }
     
     function showPolicyModal() {
