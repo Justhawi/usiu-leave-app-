@@ -46,6 +46,17 @@ const LeaveModule = {
         read: false
       });
 
+      // Send email notification to staff
+      if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured()) {
+        await EmailModule.sendLeaveRequestNotification(
+          profile.email,
+          profile.fullName,
+          requestData.leaveType,
+          days,
+          requestData.startDate
+        );
+      }
+
       // Notify department head about new request
       const deptHeads = await this.getDepartmentHeads(profile.department);
       for (const head of deptHeads) {
@@ -56,6 +67,18 @@ const LeaveModule = {
           type: 'warning',
           read: false
         });
+        
+        // Send email to department head
+        if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured() && head.email) {
+          await EmailModule.sendNewLeaveRequestToHR(
+            head.email,
+            profile.fullName,
+            profile.department,
+            requestData.leaveType,
+            days,
+            requestData.startDate
+          );
+        }
       }
       
       // Also notify HR
@@ -68,6 +91,18 @@ const LeaveModule = {
           type: 'warning',
           read: false
         });
+        
+        // Send email to HR
+        if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured() && hr.email) {
+          await EmailModule.sendNewLeaveRequestToHR(
+            hr.email,
+            profile.fullName,
+            profile.department,
+            requestData.leaveType,
+            days,
+            requestData.startDate
+          );
+        }
       }
       
       AuthModule.showToast('Leave request submitted successfully!', 'success');
@@ -162,6 +197,29 @@ const LeaveModule = {
         read: false
       });
       
+      // Send email notification to staff
+      if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured()) {
+        const startDate = requestData.startDate?.toDate ? requestData.startDate.toDate().toLocaleDateString() : 'N/A';
+        const endDate = requestData.endDate?.toDate ? requestData.endDate.toDate().toLocaleDateString() : 'N/A';
+        
+        if (status === 'approved') {
+          await EmailModule.sendLeaveApprovedNotification(
+            requestData.email,
+            requestData.staffName,
+            requestData.leaveType,
+            startDate,
+            endDate
+          );
+        } else {
+          await EmailModule.sendLeaveRejectedNotification(
+            requestData.email,
+            requestData.staffName,
+            requestData.leaveType,
+            comments
+          );
+        }
+      }
+       
       // Update leave balance if approved
       if (status === 'approved') {
         await this.updateLeaveBalance(requestData);

@@ -197,6 +197,7 @@ const AuthModule = {
           try {
             const userDoc = await db.collection('users').doc(user.uid).get();
             if (userDoc.exists) {
+              const userData = userDoc.data();
               await this.createNotification({
                 userId: user.uid,
                 type: 'success',
@@ -204,6 +205,16 @@ const AuthModule = {
                 message: 'You have successfully logged into the Leave Management System.',
                 read: false
               });
+              
+              // Send email notification (if EmailJS configured)
+              if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured()) {
+                const now = new Date();
+                await EmailModule.sendLoginNotification(
+                  userData.email || userData.contact_email || email,
+                  userData.fullName || userData.name || 'User',
+                  now.toLocaleString()
+                );
+              }
             }
           } catch (e) {
             console.log('Could not create login notification');
@@ -226,6 +237,7 @@ const AuthModule = {
             
             if (!usersRef.empty) {
               const userDoc = usersRef.docs[0];
+              const userData = userDoc.data();
               await this.createNotification({
                 userId: userDoc.id,
                 type: 'warning',
@@ -233,6 +245,16 @@ const AuthModule = {
                 message: 'Someone tried to log in to your account with an incorrect password.',
                 read: false
               });
+              
+              // Send email notification for failed login
+              if (typeof EmailModule !== 'undefined' && EmailModule.isConfigured()) {
+                const now = new Date();
+                await EmailModule.sendFailedLoginNotification(
+                  userData.email || userData.contact_email || email,
+                  userData.fullName || userData.name || 'User',
+                  now.toLocaleString()
+                );
+              }
             }
           } catch (e) {
             console.log('Could not create failed login notification');
