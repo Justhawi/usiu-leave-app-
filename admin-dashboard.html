@@ -227,7 +227,7 @@
           </div>
           <div class="table-container">
             <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Permissions</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Backup</th><th>Actions</th></tr></thead>
               <tbody id="usersTableBody"><tr><td colspan="6" class="text-center" style="padding: 2rem;">Loading...</td></tr></tbody>
             </table>
           </div>
@@ -601,16 +601,24 @@
     // Users
     function loadUsers() {
       const tbody = document.getElementById('usersTableBody');
-      tbody.innerHTML = allUsers.map(u => `
+      tbody.innerHTML = allUsers.map(u => {
+        const backupName = u.backupName ? u.backupName : '<span style="color: var(--gray-400)">None</span>';
+        return `
         <tr>
           <td>${u.fullName || u.name || 'N/A'}</td>
           <td>${u.email || 'N/A'}</td>
           <td><span class="status-badge status-${u.role || 'staff'}">${u.role || 'staff'}</span></td>
           <td>${(u.department || 'N/A').toUpperCase()}</td>
-          <td>Full</td>
-          <td><button class="btn btn-secondary" style="padding: 0.3rem 0.75rem;" onclick="editUser('${u.id}')">Edit</button></td>
+          <td>${backupName}</td>
+          <td>
+            <button class="btn btn-primary" style="padding: 0.3rem 0.75rem; margin-right: 0.4rem;" onclick="assignBackup('${u.id}')">
+              ${u.backupName ? 'Change' : 'Assign'} Backup
+            </button>
+            <button class="btn btn-secondary" style="padding: 0.3rem 0.75rem;" onclick="editUser('${u.id}')">Edit</button>
+          </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
 
       const permDiv = document.getElementById('rolePermissions');
       const roles = ['admin', 'hr', 'staff', 'finance', 'academics', 'administration', 'it', 'library', 'marketing'];
@@ -626,6 +634,69 @@
           </div>
         </div>
       `).join('');
+    }
+
+    function getUserDisplayName(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      return user ? (user.fullName || user.name || user.email || 'N/A') : 'N/A';
+    }
+
+    function assignBackup(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+
+      const availableUsers = allUsers
+        .filter(u => u.id !== userId && u.department === user.department)
+        .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+
+      const options = availableUsers.length > 0
+        ? availableUsers.map(u => `<option value="${u.id}" ${u.id === user.backupUserId ? 'selected' : ''}>${u.fullName || u.name || u.email} (${u.role || 'staff'})</option>`).join('')
+        : '<option value="">No backup candidates available</option>';
+
+      document.getElementById('genericModalTitle').textContent = `Assign Backup for ${user.fullName || user.name || 'User'}`;
+      document.getElementById('genericModalContent').innerHTML = `
+        <div class="form-group">
+          <label>Select backup user</label>
+          <select id="backupSelect" class="form-control">
+            <option value="">No backup assigned</option>
+            ${options}
+          </select>
+        </div>
+        <div style="margin-top: 1rem; color: var(--gray-300); font-size: 0.9rem;">
+          Backup users are selected from the same department so someone can step in when this person is out.
+        </div>
+      `;
+      document.getElementById('genericModalFooter').innerHTML = `
+        <button onclick="closeModal('genericModal')" class="btn btn-secondary">Cancel</button>
+        <button onclick="saveBackupAssignment('${userId}')" class="btn btn-primary">Save Backup</button>
+      `;
+      document.getElementById('genericModal').classList.add('active');
+    }
+
+    async function saveBackupAssignment(userId) {
+      const backupId = document.getElementById('backupSelect').value;
+      const db = firebase.firestore();
+      const backupUser = allUsers.find(u => u.id === backupId);
+      const updateData = {
+        backupUserId: backupId || null,
+        backupName: backupUser ? (backupUser.fullName || backupUser.name || backupUser.email) : null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        await db.collection('users').doc(userId).update(updateData);
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+          user.backupUserId = updateData.backupUserId;
+          user.backupName = updateData.backupName;
+        }
+        loadUsers();
+        showToast('Backup assignment saved', 'success');
+        closeModal('genericModal');
+      } catch (error) {
+        console.error('Backup assignment error:', error);
+        showToast('Error saving backup assignment', 'error');
+      }
     }
 
     function filterUsers() {

@@ -23,7 +23,9 @@ const LeaveModule = {
         reason: requestData.reason,
         status: 'pending',
         requestDate: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        delegatedToId: requestData.delegatedToId || null,
+        delegatedToName: requestData.delegatedToName || null
       };
       
       // Calculate number of days

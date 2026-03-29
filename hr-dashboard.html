@@ -641,6 +641,12 @@
               <div class="request-detail-label">Type</div>
               <div class="request-detail-value">${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</div>
             </div>
+            ${r.delegatedToName ? `
+            <div class="request-detail">
+              <div class="request-detail-label">Delegated To</div>
+              <div class="request-detail-value">${r.delegatedToName}</div>
+            </div>
+            ` : ''}
             <div class="request-detail">
               <div class="request-detail-label">Start</div>
               <div class="request-detail-value">${LeaveModule.formatDate(r.startDate)}</div>
@@ -675,6 +681,7 @@
           <h4 style="color: var(--gold-400); margin-bottom: 0.75rem;">${request.staffName || 'Unknown'}</h4>
           <p style="margin-bottom: 0.5rem;">${(request.leaveType || '').charAt(0).toUpperCase() + (request.leaveType || '').slice(1)} Leave</p>
           <p style="margin-bottom: 0.5rem; color: var(--gray-400);">${LeaveModule.formatDate(request.startDate)} - ${LeaveModule.formatDate(request.endDate)}</p>
+          ${request.delegatedToName ? `<p style="margin-bottom: 0.5rem; color: var(--cyan-400);">Delegated to: ${request.delegatedToName}</p>` : ''}
           <p style="color: var(--gray-400);">Reason: ${request.reason || 'Not provided'}</p>
         </div>
         <div class="form-group">
@@ -722,6 +729,7 @@
             <p>Type: ${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</p>
             <p>Duration: ${LeaveModule.formatDate(r.startDate)} - ${LeaveModule.formatDate(r.endDate)}</p>
             <p>Days: ${r.numberOfDays || 1}</p>
+            ${r.delegatedToName ? `<p>Delegated to: <strong>${r.delegatedToName}</strong></p>` : ''}
             <p>Reason: ${r.reason || 'Not provided'}</p>
           </div>
           <div>

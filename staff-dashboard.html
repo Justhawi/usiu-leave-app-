@@ -204,6 +204,14 @@
             <label for="leaveReason">Reason</label>
             <textarea id="leaveReason" class="form-control" required placeholder="Please provide a reason for your leave request..."></textarea>
           </div>
+
+          <div class="form-group">
+            <label for="delegatedTo">Delegate Work To (Optional)</label>
+            <select id="delegatedTo" class="form-control">
+              <option value="">Select a colleague to cover your duties</option>
+            </select>
+            <small style="color: var(--gray-400); font-size: 0.8rem; margin-top: 0.25rem; display: block;">Someone from your department who can step in while you're away</small>
+          </div>
           
           <div class="modal-footer">
             <button type="button" onclick="closeNewLeaveModal()" class="btn btn-secondary">Cancel</button>
@@ -308,6 +316,7 @@
     let leaveBalance = null;
     let attendanceRecords = [];
     let charts = {};
+    let departmentColleagues = [];
     
     async function initDashboard() {
       const user = AuthModule.getCurrentUser();
@@ -336,7 +345,8 @@
         loadLeaveBalance(),
         loadLeaveRequests(),
         loadAttendance(),
-        checkTodayAttendance()
+        checkTodayAttendance(),
+        loadDepartmentColleagues()
       ]);
       
       setTimeout(initCharts, 500);
@@ -414,6 +424,31 @@
       }
     }
     
+    async function loadDepartmentColleagues() {
+      try {
+        const user = AuthModule.getCurrentUser();
+        if (!userProfile || !userProfile.department) return;
+        
+        const snapshot = await firebase.firestore().collection('users')
+          .where('department', '==', userProfile.department)
+          .get();
+        
+        departmentColleagues = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(u => u.id !== user.uid);
+        
+        const delegatedSelect = document.getElementById('delegatedTo');
+        if (delegatedSelect) {
+          delegatedSelect.innerHTML = '<option value="">Select a colleague to cover your duties</option>' +
+            departmentColleagues.map(u => 
+              `<option value="${u.id}">${u.fullName || u.name || u.email}</option>`
+            ).join('');
+        }
+      } catch (error) {
+        console.error('Error loading colleagues:', error);
+      }
+    }
+    
     function calculateAttendanceRate() {
       const rateEl = document.getElementById('attendanceRate');
       if (attendanceRecords.length === 0) {
@@ -464,6 +499,12 @@
               <div class="request-detail-label">Duration</div>
               <div class="request-detail-value">${request.numberOfDays || 1} day(s)</div>
             </div>
+            ${request.delegatedToName ? `
+            <div class="request-detail">
+              <div class="request-detail-label">Delegated To</div>
+              <div class="request-detail-value">${request.delegatedToName}</div>
+            </div>
+            ` : ''}
             <div class="request-detail">
               <div class="request-detail-label">Submitted</div>
               <div class="request-detail-value">${LeaveModule.formatDate(request.requestDate)}</div>
@@ -634,11 +675,16 @@
     document.getElementById('newLeaveForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      const delegatedToId = document.getElementById('delegatedTo').value;
+      const delegatedUser = departmentColleagues.find(u => u.id === delegatedToId);
+      
       const requestData = {
         leaveType: document.getElementById('leaveType').value,
         startDate: document.getElementById('startDate').value,
         endDate: document.getElementById('endDate').value,
-        reason: document.getElementById('leaveReason').value
+        reason: document.getElementById('leaveReason').value,
+        delegatedToId: delegatedToId || null,
+        delegatedToName: delegatedUser ? (delegatedUser.fullName || delegatedUser.name || delegatedUser.email) : null
       };
       
       try {
@@ -682,6 +728,14 @@
           <div>
             <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Reviewed By</h4>
             <p>${request.reviewedByName} on ${LeaveModule.formatDate(request.reviewedAt)}</p>
+          </div>
+          ` : ''}
+          
+          ${request.delegatedToName ? `
+          <div>
+            <h4 style="color: var(--gold-400); margin-bottom: 0.5rem;">Delegated To</h4>
+            <p>${request.delegatedToName}</p>
+            <p style="font-size: 0.85rem; color: var(--gray-400);">This colleague will cover your duties while you're away</p>
           </div>
           ` : ''}
           

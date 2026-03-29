@@ -146,6 +146,7 @@
             ...u,
             status: onLeaveUsers.has(u.id) ? 'on-leave' : 
                    (u.currentStatus === 'out-office' ? 'out-office' : 'available'),
+            backupName: u.backupName || null,
             officeHours: u.officeHours || '8:00 AM - 5:00 PM',
             building: u.building || 'Main Campus',
             office: u.office || 'TBD'
@@ -199,6 +200,7 @@
             <th>Staff Member</th>
             <th>Department</th>
             <th>Status</th>
+            <th>Backup</th>
             <th>Office Hours</th>
             <th>Action</th>
           </tr>
@@ -208,6 +210,7 @@
             const name = staff.fullName || staff.name || 'Unknown';
             const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             const dept = staff.department ? staff.department.charAt(0).toUpperCase() + staff.department.slice(1) : 'General';
+            const backup = staff.backupName ? staff.backupName : '—';
             
             let statusBadge = '';
             let statusColor = '';
@@ -233,6 +236,7 @@
               </td>
               <td>${dept}</td>
               <td>${statusBadge}</td>
+              <td>${backup}</td>
               <td>${staff.officeHours}</td>
               <td>
                 <button onclick="showStaffInfo('${staff.id}')" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
@@ -289,6 +293,12 @@
             <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Office</div>
             <div style="font-weight: 500;">${staff.office}</div>
           </div>
+          ${staff.backupName ? `
+          <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
+            <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Backup Coverage</div>
+            <div style="font-weight: 500;">${staff.backupName}</div>
+          </div>
+          ` : ''}
           ${staff.email ? `
           <div style="padding: 1rem; background: var(--gray-800); border-radius: var(--radius-sm);">
             <div style="color: var(--gray-400); font-size: 0.85rem; margin-bottom: 0.25rem;">Email</div>

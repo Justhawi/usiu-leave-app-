@@ -237,6 +237,7 @@
           </div>
           <div class="request-details">
             <div class="request-detail"><div class="request-detail-label">Type</div><div class="request-detail-value">${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</div></div>
+            ${r.delegatedToName ? `<div class="request-detail"><div class="request-detail-label">Delegated To</div><div class="request-detail-value">${r.delegatedToName}</div></div>` : ''}
             <div class="request-detail"><div class="request-detail-label">Start</div><div class="request-detail-value">${LeaveModule.formatDate(r.startDate)}</div></div>
             <div class="request-detail"><div class="request-detail-label">End</div><div class="request-detail-value">${LeaveModule.formatDate(r.endDate)}</div></div>
             <div class="request-detail"><div class="request-detail-label">Days</div><div class="request-detail-value">${r.numberOfDays || 1}</div></div>
@@ -260,6 +261,7 @@
           <h4 style="color: var(--gold-400);">${r.staffName || 'Unknown'}</h4>
           <p>${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)} Leave</p>
           <p style="color: var(--gray-400);">${LeaveModule.formatDate(r.startDate)} - ${LeaveModule.formatDate(r.endDate)} (${r.numberOfDays || 1} days)</p>
+          ${r.delegatedToName ? `<p style="color: var(--cyan-400);">Delegated to: ${r.delegatedToName}</p>` : ''}
           <p style="color: var(--gray-400);">Reason: ${r.reason || 'Not provided'}</p>
         </div>
         <div class="form-group"><label>Comments</label><textarea id="comments" class="form-control" placeholder="Add comments..."></textarea></div>
