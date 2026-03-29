@@ -37,14 +37,38 @@ const LeaveModule = {
       // Add to Firestore
       const docRef = await firebase.firestore().collection('leave_requests').add(leaveRequest);
       
-      // Create notification for department head
+      // Notify staff that request was submitted
       await this.createNotification({
         userId: user.uid,
         title: 'Leave Request Submitted',
-        message: `Your ${requestData.leaveType} leave request has been submitted`,
+        message: `Your ${requestData.leaveType} leave request for ${days} day(s) has been submitted and is pending approval`,
         type: 'info',
         read: false
       });
+
+      // Notify department head about new request
+      const deptHeads = await this.getDepartmentHeads(profile.department);
+      for (const head of deptHeads) {
+        await this.createNotification({
+          userId: head.uid,
+          title: 'New Leave Request',
+          message: `${profile.fullName} submitted a ${requestData.leaveType} leave request for ${days} day(s)`,
+          type: 'warning',
+          read: false
+        });
+      }
+      
+      // Also notify HR
+      const hrUsers = await this.getHRUsers();
+      for (const hr of hrUsers) {
+        await this.createNotification({
+          userId: hr.uid,
+          title: 'New Leave Request',
+          message: `${profile.fullName} (${profile.department}) submitted a ${requestData.leaveType} leave request for ${days} day(s)`,
+          type: 'warning',
+          read: false
+        });
+      }
       
       AuthModule.showToast('Leave request submitted successfully!', 'success');
       return docRef.id;
@@ -211,10 +235,11 @@ const LeaveModule = {
     try {
       await firebase.firestore().collection('notifications').add({
         ...notificationData,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     } catch (error) {
-      // Error creating notification
+      console.error('Error creating notification:', error);
     }
   },
   
@@ -266,6 +291,31 @@ const LeaveModule = {
       await batch.commit();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+    }
+  },
+
+  // Get department heads for a department
+  async getDepartmentHeads(department) {
+    try {
+      const snapshot = await firebase.firestore().collection('users')
+        .where('department', '==', department)
+        .where('role', 'in', ['admin', 'hr'])
+        .get();
+      return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    } catch (error) {
+      return [];
+    }
+  },
+
+  // Get all HR users
+  async getHRUsers() {
+    try {
+      const snapshot = await firebase.firestore().collection('users')
+        .where('role', '==', 'hr')
+        .get();
+      return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    } catch (error) {
+      return [];
     }
   },
 
