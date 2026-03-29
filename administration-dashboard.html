@@ -29,6 +29,21 @@
           <div class="brand-text"><h1>USIU-Africa</h1><p>Administration Department</p></div>
         </div>
         <div class="nav-links">
+          <div class="notification-container" style="position: relative; margin-right: 0.75rem;">
+            <button onclick="toggleNotificationPanel()" class="btn btn-secondary" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; position: relative;" title="Notifications">
+              🔔
+            </button>
+            <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+            <div id="notificationPanel" class="notification-panel" style="display: none;">
+              <div class="notification-header">
+                <h4>Notifications</h4>
+                <button onclick="markAllNotificationsRead()" style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 0.8rem;">Mark all read</button>
+              </div>
+              <div id="notificationList" class="notification-list">
+                <p style="padding: 1rem; text-align: center; color: var(--text-muted);">No notifications</p>
+              </div>
+            </div>
+          </div>
           <span id="userName" style="color: var(--white); font-weight: 600;"></span>
           <button onclick="AuthModule.signOut()" class="btn btn-secondary" style="padding: 0.5rem 1rem;">Logout</button>
         </div>
@@ -414,7 +429,134 @@
       setTimeout(() => t.classList.remove('show'), 4000);
     }
 
-    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 1000));
+    // Notification Functions
+    function toggleNotificationPanel() {
+      const panel = document.getElementById('notificationPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      if (panel.style.display === 'block') {
+        loadNotifications();
+      }
+    }
+    
+    async function loadNotifications() {
+      const user = AuthModule.getCurrentUser();
+      if (!user) return;
+      
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('notifications')
+          .where('userId', '==', user.uid)
+          .orderBy('timestamp', 'desc')
+          .limit(20)
+          .get();
+        
+        const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const list = document.getElementById('notificationList');
+        
+        if (notifications.length === 0) {
+          list.innerHTML = '<p style="padding: 1rem; text-align: center; color: var(--text-muted);">No notifications</p>';
+          return;
+        }
+        
+        let unreadCount = 0;
+        list.innerHTML = notifications.map(n => {
+          if (!n.read) unreadCount++;
+          const timeAgo = n.timestamp ? getTimeAgo(n.timestamp.toDate()) : 'Just now';
+          const icon = n.type === 'success' ? '✓' : n.type === 'warning' ? '⚠' : n.type === 'error' ? '✕' : 'ℹ';
+          return `
+            <div class="notification-item ${n.read ? '' : 'unread'}" onclick="markNotificationRead('${n.id}')">
+              <div class="notification-icon">${icon}</div>
+              <div class="notification-content">
+                <div class="notification-title">${n.title || 'Notification'}</div>
+                <div class="notification-message">${n.message || ''}</div>
+                <div class="notification-time">${timeAgo}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        document.getElementById('notificationBadge').textContent = unreadCount;
+        document.getElementById('notificationBadge').style.display = unreadCount > 0 ? 'inline-block' : 'none';
+      } catch (error) {
+        console.log('Error loading notifications:', error);
+      }
+    }
+    
+    function getTimeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 60) return 'Just now';
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return minutes + 'm ago';
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + 'h ago';
+      const days = Math.floor(hours / 24);
+      return days + 'd ago';
+    }
+    
+    async function markNotificationRead(notificationId) {
+      try {
+        const db = firebase.firestore();
+        await db.collection('notifications').doc(notificationId).update({ read: true });
+        loadNotifications();
+      } catch (error) {
+        console.log('Error marking notification read:', error);
+      }
+    }
+    
+    async function markAllNotificationsRead() {
+      const user = AuthModule.getCurrentUser();
+      if (!user) return;
+      
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('notifications')
+          .where('userId', '==', user.uid)
+          .where('read', '==', false)
+          .get();
+        
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { read: true });
+        });
+        await batch.commit();
+        
+        loadNotifications();
+      } catch (error) {
+        console.log('Error marking all notifications read:', error);
+      }
+    }
+    
+    let notificationUnsubscribe;
+    function setupNotificationListener() {
+      const user = AuthModule.getCurrentUser();
+      if (!user) return;
+      
+      const db = firebase.firestore();
+      if (notificationUnsubscribe) notificationUnsubscribe();
+      
+      notificationUnsubscribe = db.collection('notifications')
+        .where('userId', '==', user.uid)
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .onSnapshot(snapshot => {
+          if (!snapshot.empty) {
+            loadNotifications();
+          }
+        });
+    }
+    
+    document.addEventListener('click', function(e) {
+      const container = document.querySelector('.notification-container');
+      const panel = document.getElementById('notificationPanel');
+      if (container && !container.contains(e.target)) {
+        panel.style.display = 'none';
+      }
+    });
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(init, 1000);
+      setTimeout(setupNotificationListener, 2000);
+    });
   </script>
 </body>
 </html>

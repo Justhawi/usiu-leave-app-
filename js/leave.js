@@ -247,6 +247,81 @@ const LeaveModule = {
       // Error marking notification as read
     }
   },
+
+  // Mark all notifications as read
+  async markAllNotificationsRead(userId) {
+    try {
+      const snapshot = await firebase.firestore().collection('notifications')
+        .where('userId', '==', userId)
+        .where('read', '==', false)
+        .get();
+      
+      const batch = firebase.firestore().batch();
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          read: true,
+          readAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  },
+
+  // Get unread notification count
+  async getUnreadCount(userId) {
+    try {
+      const snapshot = await firebase.firestore().collection('notifications')
+        .where('userId', '==', userId)
+        .where('read', '==', false)
+        .get();
+      return snapshot.size;
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  // Send notification to multiple users (for department heads)
+  async notifyDepartment(department, title, message, type = 'info') {
+    try {
+      const usersSnapshot = await firebase.firestore().collection('users')
+        .where('department', '==', department)
+        .get();
+      
+      const batch = firebase.firestore().batch();
+      usersSnapshot.docs.forEach(doc => {
+        const notifRef = firebase.firestore().collection('notifications').doc();
+        batch.set(notifRef, {
+          userId: doc.id,
+          title: title,
+          message: message,
+          type: type,
+          read: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error notifying department:', error);
+    }
+  },
+
+  // Send notification to specific user
+  async notifyUser(userId, title, message, type = 'info') {
+    try {
+      await firebase.firestore().collection('notifications').add({
+        userId: userId,
+        title: title,
+        message: message,
+        type: type,
+        read: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error notifying user:', error);
+    }
+  },
   
   // Format date
   formatDate(timestamp) {

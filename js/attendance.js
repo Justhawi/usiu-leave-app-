@@ -41,6 +41,15 @@ const AttendanceModule = {
       const db = firebase.firestore();
       const docRef = await db.collection('attendance').add(attendanceData);
       
+      // Create notification
+      await LeaveModule.createNotification({
+        userId: userId,
+        title: 'Check-in Recorded',
+        message: `You checked in at ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+        type: 'success',
+        read: false
+      });
+      
       AuthModule.showToast(`Checked in successfully!`, 'success');
       return docRef.id;
     } catch (error) {
@@ -82,6 +91,18 @@ const AttendanceModule = {
       await db.collection('attendance').doc(todayRecord.id).update({
         checkOutTime: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      const now = new Date();
+      const hours = AttendanceModule.calculateWorkHours(todayRecord.checkInTime, firebase.firestore.FieldValue.serverTimestamp());
+      
+      // Create notification
+      await LeaveModule.createNotification({
+        userId: userId,
+        title: 'Check-out Recorded',
+        message: `You checked out at ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}. Total hours: ${hours}`,
+        type: 'info',
+        read: false
       });
       
       AuthModule.showToast('Checked out successfully!', 'success');

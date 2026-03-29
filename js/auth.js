@@ -189,12 +189,55 @@ const AuthModule = {
       // Log successful login
       if (db) {
         await this.logLoginAttempt(email, 'success');
+        
+        // Get user ID for notification
+        const user = auth.currentUser;
+        if (user) {
+          // Try to get user document to find the userId
+          try {
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            if (userDoc.exists) {
+              await this.createNotification({
+                userId: user.uid,
+                type: 'success',
+                title: 'Successful Login',
+                message: 'You have successfully logged into the Leave Management System.',
+                read: false
+              });
+            }
+          } catch (e) {
+            console.log('Could not create login notification');
+          }
+        }
       }
       // Auth state change will trigger loadUserProfile -> handleLoggedIn
     } catch (error) {
       // Log failed login attempt
       if (db) {
         await this.logLoginAttempt(email, 'failed', error.code);
+        
+        // Create notification for wrong password
+        if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+          try {
+            const usersRef = await db.collection('users')
+              .where('email', '==', email)
+              .limit(1)
+              .get();
+            
+            if (!usersRef.empty) {
+              const userDoc = usersRef.docs[0];
+              await this.createNotification({
+                userId: userDoc.id,
+                type: 'warning',
+                title: 'Failed Login Attempt',
+                message: 'Someone tried to log in to your account with an incorrect password.',
+                read: false
+              });
+            }
+          } catch (e) {
+            console.log('Could not create failed login notification');
+          }
+        }
       }
       this.showLoading(false);
       this.showToast(this.getErrorMessage(error), 'error');
