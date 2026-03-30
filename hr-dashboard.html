@@ -77,6 +77,8 @@
           <button onclick="showSection('reports')" class="btn btn-secondary" id="btn-reports">Reports</button>
           <button onclick="recordAttendance()" class="btn btn-success" id="checkInBtn">✓ Check In</button>
           <button onclick="recordCheckout()" class="btn btn-warning" id="checkOutBtn" style="display: none;">⏱ Check Out</button>
+          <button onclick="showCalendarModal()" class="btn btn-secondary">📅 Calendar</button>
+          <button onclick="showHistoryModal()" class="btn btn-secondary">📄 History</button>
         </div>
       </div>
 
@@ -372,6 +374,67 @@
     </div>
   </div>
 
+  <!-- Calendar Modal -->
+  <div id="calendarModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3>Leave Calendar</h3>
+        <button onclick="closeCalendarModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <button onclick="changeMonth(-1)" class="btn btn-secondary">← Prev</button>
+          <h4 id="calendarMonth">Month Year</h4>
+          <button onclick="changeMonth(1)" class="btn btn-secondary">Next →</button>
+        </div>
+        <div id="calendarGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;"></div>
+        <div style="margin-top: 1rem;">
+          <span style="display: inline-block; width: 12px; height: 12px; background: #22c55e; margin-right: 5px;"></span> Annual
+          <span style="display: inline-block; width: 12px; height: 12px; background: #ef4444; margin-left: 10px; margin-right: 5px;"></span> Sick
+          <span style="display: inline-block; width: 12px; height: 12px; background: #3b82f6; margin-left: 10px; margin-right: 5px;"></span> Personal
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>All Leave History</h3>
+        <button onclick="closeHistoryModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <input type="text" id="historySearch" placeholder="Search by name..." class="input" style="max-width: 200px;" onkeyup="filterHistory()">
+          <select id="historyFilterStatus" class="input" style="max-width: 150px;" onchange="filterHistory()">
+            <option value="">All Status</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="pending">Pending</option>
+          </select>
+          <button onclick="printAllLeaveHistory()" class="btn btn-secondary">🖨 Print</button>
+        </div>
+        <div class="table-container">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Type</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Days</th>
+                <th>Status</th>
+                <th>Applied On</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Review Modal -->
   <div id="actionModal" class="modal">
     <div class="modal-content">
@@ -412,6 +475,9 @@
     let allBalances = [];
     let allUsers = [];
     let charts = {};
+    let calendarDate = new Date();
+    let calendarEvents = [];
+    let allLeaveHistory = [];
     
     async function init() {
       const user = AuthModule.getCurrentUser();
@@ -474,6 +540,258 @@
       } catch (error) {
         AuthModule.showToast('Error recording checkout', 'error');
       }
+    }
+    
+    // Calendar Functions
+    function showCalendarModal() {
+      document.getElementById('calendarModal').classList.add('active');
+      renderCalendar();
+      loadCalendarEvents();
+    }
+    
+    function closeCalendarModal() {
+      document.getElementById('calendarModal').classList.remove('active');
+    }
+    
+    async function loadCalendarEvents() {
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('leave_requests')
+          .where('status', '==', 'approved')
+          .get();
+        
+        calendarEvents = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.staffName,
+            start: data.startDate?.toDate ? data.startDate.toDate() : new Date(data.startDate),
+            end: data.endDate?.toDate ? data.endDate.toDate() : new Date(data.endDate),
+            leaveType: data.leaveType,
+            department: data.department
+          };
+        });
+        
+        renderCalendar();
+      } catch (error) {
+        console.error('Error loading calendar events:', error);
+      }
+    }
+    
+    function renderCalendar() {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      
+      document.getElementById('calendarMonth').textContent = 
+        new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDay = firstDay.getDay();
+      
+      const holidays = LeaveModule.getPublicHolidays(year);
+      
+      let html = '<div style="background: var(--bg-secondary); padding: 0.5rem;">Sun</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Mon</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Tue</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Wed</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Thu</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Fri</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Sat</div>';
+      
+      for (let i = 0; i < startingDay; i++) {
+        html += '<div style="padding: 0.5rem; background: var(--gray-800);"></div>';
+      }
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const currentDate = new Date(year, month, day);
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        const holiday = holidays.find(h => h.date === dateStr);
+        
+        const eventsOnDay = calendarEvents.filter(e => {
+          const start = new Date(e.start);
+          const end = new Date(e.end);
+          return currentDate >= start && currentDate <= end;
+        });
+        
+        let bgColor = 'var(--card-bg)';
+        let textColor = 'var(--text-primary)';
+        
+        if (holiday) {
+          bgColor = '#fbbf24';
+          textColor = '#000';
+        } else if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+          bgColor = 'var(--gray-700)';
+        } else if (eventsOnDay.length > 0) {
+          const type = eventsOnDay[0].leaveType;
+          if (type === 'annual') bgColor = '#22c55e';
+          else if (type === 'sick') bgColor = '#ef4444';
+          else if (type === 'personal') bgColor = '#3b82f6';
+          else bgColor = '#8b5cf6';
+        }
+        
+        html += `<div style="padding: 0.5rem; background: ${bgColor}; color: ${textColor}; font-size: 0.8rem;">
+          <div>${day}</div>
+          ${holiday ? `<div style="font-size: 0.6rem;">${holiday.name}</div>` : ''}
+          ${eventsOnDay.slice(0, 2).map(e => `<div style="font-size: 0.6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.title}</div>`).join('')}
+        </div>`;
+      }
+      
+      document.getElementById('calendarGrid').innerHTML = html;
+    }
+    
+    function changeMonth(delta) {
+      calendarDate.setMonth(calendarDate.getMonth() + delta);
+      renderCalendar();
+    }
+    
+    // History Functions
+    function showHistoryModal() {
+      document.getElementById('historyModal').classList.add('active');
+      loadAllLeaveHistory();
+    }
+    
+    function closeHistoryModal() {
+      document.getElementById('historyModal').classList.remove('active');
+    }
+    
+    async function loadAllLeaveHistory() {
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('leave_requests')
+          .orderBy('requestDate', 'desc')
+          .limit(200)
+          .get();
+        
+        allLeaveHistory = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            startDate: data.startDate?.toDate ? data.startDate.toDate() : null,
+            endDate: data.endDate?.toDate ? data.endDate.toDate() : null,
+            requestDate: data.requestDate?.toDate ? data.requestDate.toDate() : null
+          };
+        });
+        
+        renderHistoryTable();
+      } catch (error) {
+        console.error('Error loading history:', error);
+      }
+    }
+    
+    function renderHistoryTable() {
+      const tbody = document.getElementById('historyTableBody');
+      if (allLeaveHistory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No leave history found</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = allLeaveHistory.map(r => {
+        const startDate = r.startDate ? r.startDate.toLocaleDateString() : '-';
+        const endDate = r.endDate ? r.endDate.toLocaleDateString() : '-';
+        const requestDate = r.requestDate ? r.requestDate.toLocaleDateString() : '-';
+        
+        let statusClass = 'status-pending';
+        if (r.status === 'approved') statusClass = 'status-approved';
+        else if (r.status === 'rejected') statusClass = 'status-rejected';
+        else if (r.status === 'cancelled') statusClass = 'status-cancelled';
+        
+        return `<tr>
+          <td>${r.staffName || '-'}</td>
+          <td>${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</td>
+          <td>${startDate}</td>
+          <td>${endDate}</td>
+          <td>${r.numberOfDays || '-'}</td>
+          <td><span class="status-badge ${statusClass}">${r.status}</span></td>
+          <td>${requestDate}</td>
+        </tr>`;
+      }).join('');
+    }
+    
+    function filterHistory() {
+      const search = document.getElementById('historySearch').value.toLowerCase();
+      const status = document.getElementById('historyFilterStatus').value;
+      
+      let filtered = allLeaveHistory;
+      
+      if (search) {
+        filtered = filtered.filter(r => (r.staffName || '').toLowerCase().includes(search));
+      }
+      
+      if (status) {
+        filtered = filtered.filter(r => r.status === status);
+      }
+      
+      const tbody = document.getElementById('historyTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No matching records</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = filtered.map(r => {
+        const startDate = r.startDate ? r.startDate.toLocaleDateString() : '-';
+        const endDate = r.endDate ? r.endDate.toLocaleDateString() : '-';
+        const requestDate = r.requestDate ? r.requestDate.toLocaleDateString() : '-';
+        
+        let statusClass = 'status-pending';
+        if (r.status === 'approved') statusClass = 'status-approved';
+        else if (r.status === 'rejected') statusClass = 'status-rejected';
+        
+        return `<tr>
+          <td>${r.staffName || '-'}</td>
+          <td>${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</td>
+          <td>${startDate}</td>
+          <td>${endDate}</td>
+          <td>${r.numberOfDays || '-'}</td>
+          <td><span class="status-badge ${statusClass}">${r.status}</span></td>
+          <td>${requestDate}</td>
+        </tr>`;
+      }).join('');
+    }
+    
+    function printAllLeaveHistory() {
+      const printWindow = window.open('', '_blank');
+      const history = document.getElementById('historyTableBody').innerHTML;
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Leave History Report</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              h1 { text-align: center; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background: #f5f5f5; }
+            </style>
+          </head>
+          <body>
+            <h1>Leave History Report</h1>
+            <p>Generated on: ${new Date().toLocaleDateString()}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Type</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Days</th>
+                  <th>Status</th>
+                  <th>Applied On</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${history}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
     }
     
     // Attendance Management

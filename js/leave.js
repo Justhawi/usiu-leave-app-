@@ -455,5 +455,356 @@ const LeaveModule = {
       hour: '2-digit',
       minute: '2-digit'
     });
+  },
+
+  // ======== NEW FEATURES ========
+
+  // Public Holidays (Kenya - can be customized)
+  getPublicHolidays(year) {
+    return [
+      { name: 'New Year', date: `${year}-01-01` },
+      { name: 'Good Friday', date: `${year}-04-18` },
+      { name: 'Easter Monday', date: `${year}-04-21` },
+      { name: 'Labour Day', date: `${year}-05-01` },
+      { name: 'Madaraka Day', date: `${year}-06-01` },
+      { name: 'Independence Day', date: `${year}-07-12` },
+      { name: 'Halloween', date: `${year}-10-20` },
+      { name: 'Christmas Day', date: `${year}-12-25` },
+      { name: 'Boxing Day', date: `${year}-12-26` }
+    ];
+  },
+
+  // Check if date is a public holiday
+  isPublicHoliday(date) {
+    const year = date.getFullYear();
+    const holidays = this.getPublicHolidays(year);
+    const dateStr = date.toISOString().split('T')[0];
+    return holidays.find(h => h.date === dateStr);
+  },
+
+  // Calculate working days (excluding weekends and holidays)
+  calculateWorkingDays(startDate, endDate) {
+    let count = 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const day = d.getDay();
+      const isWeekend = day === 0 || day === 6; // Sunday or Saturday
+      const isHoliday = this.isPublicHoliday(d);
+      
+      if (!isWeekend && !isHoliday) {
+        count++;
+      }
+    }
+    return count;
+  },
+
+  // Check leave balance and send alert if low
+  async checkLeaveBalance(userId) {
+    try {
+      const balanceDoc = await firebase.firestore().collection('leave_balances').doc(userId).get();
+      if (!balanceDoc.exists) return;
+      
+      const balance = balanceDoc.data();
+      const thresholds = {
+        annualLeave: 3,
+        sickLeave: 2,
+        personalLeave: 1
+      };
+      
+      // Check annual leave
+      const annualRemaining = (balance.annualLeave || 0) - (balance.usedAnnual || 0);
+      if (annualRemaining <= thresholds.annualLeave && annualRemaining > 0) {
+        await this.createNotification({
+          userId: userId,
+          title: 'Low Leave Balance Alert',
+          message: `You only have ${annualRemaining} day(s) of annual leave remaining. Plan accordingly!`,
+          type: 'warning',
+          read: false
+        });
+      }
+      
+      // Check sick leave
+      const sickRemaining = (balance.sickLeave || 0) - (balance.usedSick || 0);
+      if (sickRemaining <= thresholds.sickLeave && sickRemaining > 0) {
+        await this.createNotification({
+          userId: userId,
+          title: 'Low Sick Leave Balance',
+          message: `You only have ${sickRemaining} day(s) of sick leave remaining.`,
+          type: 'warning',
+          read: false
+        });
+      }
+      
+      // Check personal leave
+      const personalRemaining = (balance.personalLeave || 0) - (balance.usedPersonal || 0);
+      if (personalRemaining <= thresholds.personalLeave && personalRemaining > 0) {
+        await this.createNotification({
+          userId: userId,
+          title: 'Low Personal Leave Balance',
+          message: `You only have ${personalRemaining} day(s) of personal leave remaining.`,
+          type: 'warning',
+          read: false
+        });
+      }
+    } catch (error) {
+      console.error('Error checking leave balance:', error);
+    }
+  },
+
+  // Check upcoming leave and send reminders
+  async checkUpcomingLeave(userId) {
+    try {
+      const snapshot = await firebase.firestore().collection('leave_requests')
+        .where('userId', '==', userId)
+        .where('status', '==', 'approved')
+        .get();
+      
+      const today = new Date();
+      const threeDaysFromNow = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000);
+      
+      for (const doc of snapshot.docs) {
+        const request = doc.data();
+        const startDate = request.startDate?.toDate ? request.startDate.toDate() : new Date(request.startDate);
+        
+        if (startDate > today && startDate <= threeDaysFromNow) {
+          const daysUntil = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
+          
+          await this.createNotification({
+            userId: userId,
+            title: 'Upcoming Leave Reminder',
+            message: `Your ${request.leaveType} leave starts in ${daysUntil} day(s) on ${this.formatDate(startDate)}`,
+            type: 'info',
+            read: false
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking upcoming leave:', error);
+    }
+  },
+
+  // Submit leave rescheduling request
+  async submitRescheduleRequest(requestId, newStartDate, newEndDate, reason) {
+    try {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      
+      await firebase.firestore().collection('leave_requests').doc(requestId).update({
+        rescheduleRequested: true,
+        originalStartDate: firebase.firestore.FieldValue.serverTimestamp(),
+        originalEndDate: firebase.firestore.FieldValue.serverTimestamp(),
+        newStartDate: firebase.firestore.Timestamp.fromDate(new Date(newStartDate)),
+        newEndDate: firebase.firestore.Timestamp.fromDate(new Date(newEndDate)),
+        rescheduleReason: reason,
+        rescheduleStatus: 'pending',
+        rescheduleRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      await this.createNotification({
+        userId: user.uid,
+        title: 'Reschedule Request Submitted',
+        message: 'Your leave reschedule request has been submitted for approval',
+        type: 'info',
+        read: false
+      });
+      
+      // Notify HR and department head
+      const hrUsers = await this.getHRUsers();
+      for (const hr of hrUsers) {
+        await this.createNotification({
+          userId: hr.uid,
+          title: 'Leave Reschedule Request',
+          message: `${profile.fullName} requested to reschedule their leave`,
+          type: 'warning',
+          read: false
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error submitting reschedule request:', error);
+      return false;
+    }
+  },
+
+  // Audit log - track all changes
+  async addAuditLog(action, details) {
+    try {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      
+      await firebase.firestore().collection('audit_logs').add({
+        action: action,
+        details: details,
+        userId: user?.uid || 'system',
+        userName: profile?.fullName || 'System',
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        date: new Date().toISOString().split('T')[0]
+      });
+    } catch (error) {
+      console.error('Error adding audit log:', error);
+    }
+  },
+
+  // Get leave statistics for reports
+  async getLeaveStatistics(department = null, year = null) {
+    try {
+      let query = firebase.firestore().collection('leave_requests');
+      if (department) {
+        query = query.where('department', '==', department);
+      }
+      
+      const snapshot = await query.get();
+      const requests = snapshot.docs.map(doc => doc.data());
+      
+      const year = year || new Date().getFullYear();
+      
+      const stats = {
+        total: 0,
+        approved: 0,
+        rejected: 0,
+        pending: 0,
+        cancelled: 0,
+        byType: {},
+        byMonth: {},
+        totalDays: 0
+      };
+      
+      requests.forEach(req => {
+        const requestDate = req.requestDate?.toDate ? req.requestDate.toDate() : new Date();
+        
+        if (requestDate.getFullYear() === year) {
+          stats.total++;
+          stats[req.status] = (stats[req.status] || 0) + 1;
+          
+          // By type
+          stats.byType[req.leaveType] = (stats.byType[req.leaveType] || 0) + 1;
+          
+          // By month
+          const month = requestDate.toLocaleString('en-US', { month: 'long' });
+          stats.byMonth[month] = (stats.byMonth[month] || 0) + 1;
+          
+          // Total days
+          if (req.status === 'approved') {
+            stats.totalDays += req.numberOfDays || 0;
+          }
+        }
+      });
+      
+      return stats;
+    } catch (error) {
+      console.error('Error getting statistics:', error);
+      return null;
+    }
+  },
+
+  // Leave encashment request
+  async requestEncashment(userId, leaveType, days, reason) {
+    try {
+      const user = AuthModule.getCurrentUser();
+      const profile = AuthModule.getUserProfile();
+      
+      // Check balance
+      const balanceDoc = await firebase.firestore().collection('leave_balances').doc(userId).get();
+      const balance = balanceDoc.data();
+      
+      let available = 0;
+      if (leaveType === 'annual') available = (balance.annualLeave || 0) - (balance.usedAnnual || 0);
+      else if (leaveType === 'sick') available = (balance.sickLeave || 0) - (balance.usedSick || 0);
+      else if (leaveType === 'personal') available = (balance.personalLeave || 0) - (balance.usedPersonal || 0);
+      
+      if (days > available) {
+        throw new Error(`Insufficient ${leaveType} leave balance. Available: ${days}`);
+      }
+      
+      await firebase.firestore().collection('encashment_requests').add({
+        userId: userId,
+        staffName: profile.fullName,
+        employeeId: profile.employeeId,
+        department: profile.department,
+        leaveType: leaveType,
+        days: days,
+        reason: reason,
+        status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      await this.createNotification({
+        userId: userId,
+        title: 'Encashment Request Submitted',
+        message: `Your request to encash ${days} day(s) of ${leaveType} leave has been submitted`,
+        type: 'info',
+        read: false
+      });
+      
+      // Notify HR
+      const hrUsers = await this.getHRUsers();
+      for (const hr of hrUsers) {
+        await this.createNotification({
+          userId: hr.uid,
+          title: 'New Encashment Request',
+          message: `${profile.fullName} requested to encash ${days} day(s) of ${leaveType} leave`,
+          type: 'warning',
+          read: false
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error requesting encashment:', error);
+      return false;
+    }
+  },
+
+  // Get leave history for self-service
+  async getLeaveHistory(userId) {
+    try {
+      const snapshot = await firebase.firestore().collection('leave_requests')
+        .where('userId', '==', userId)
+        .orderBy('requestDate', 'desc')
+        .get();
+      
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting leave history:', error);
+      return [];
+    }
+  },
+
+  // Get approved leave for calendar view
+  async getApprovedLeaveForCalendar(department = null, startDate = null, endDate = null) {
+    try {
+      let query = firebase.firestore().collection('leave_requests')
+        .where('status', '==', 'approved');
+      
+      const snapshot = await query.get();
+      
+      let events = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.staffName,
+          start: data.startDate?.toDate ? data.startDate.toDate().toISOString().split('T')[0] : data.startDate,
+          end: data.endDate?.toDate ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+          leaveType: data.leaveType,
+          department: data.department
+        };
+      });
+      
+      // Filter by department if specified
+      if (department) {
+        events = events.filter(e => e.department === department);
+      }
+      
+      return events;
+    } catch (error) {
+      console.error('Error getting calendar events:', error);
+      return [];
+    }
   }
 };

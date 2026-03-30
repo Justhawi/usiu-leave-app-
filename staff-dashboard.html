@@ -80,11 +80,20 @@
           <button onclick="showNewLeaveModal()" class="btn btn-primary">
             📋 New Leave Request
           </button>
+          <button onclick="showEncashmentModal()" class="btn btn-warning">
+            💰 Leave Encashment
+          </button>
           <button onclick="recordAttendance()" class="btn btn-success" id="checkInBtn">
             ✓ Check In
           </button>
           <button onclick="recordCheckout()" class="btn btn-warning" id="checkOutBtn" style="display: none;">
             ⏱ Check Out
+          </button>
+          <button onclick="showCalendarModal()" class="btn btn-secondary">
+            📅 Calendar
+          </button>
+          <button onclick="showHistoryModal()" class="btn btn-secondary">
+            📄 History
           </button>
         </div>
       </div>
@@ -303,6 +312,114 @@
     </div>
   </div>
 
+  <!-- Calendar Modal -->
+  <div id="calendarModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3>Leave Calendar</h3>
+        <button onclick="closeCalendarModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <button onclick="changeMonth(-1)" class="btn btn-secondary">← Prev</button>
+          <h4 id="calendarMonth">Month Year</h4>
+          <button onclick="changeMonth(1)" class="btn btn-secondary">Next →</button>
+        </div>
+        <div id="calendarGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center;"></div>
+        <div style="margin-top: 1rem;">
+          <span style="display: inline-block; width: 12px; height: 12px; background: #22c55e; margin-right: 5px;"></span> Annual
+          <span style="display: inline-block; width: 12px; height: 12px; background: #ef4444; margin-left: 10px; margin-right: 5px;"></span> Sick
+          <span style="display: inline-block; width: 12px; height: 12px; background: #3b82f6; margin-left: 10px; margin-right: 5px;"></span> Personal
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>My Leave History</h3>
+        <button onclick="closeHistoryModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1rem;">
+          <button onclick="printLeaveHistory()" class="btn btn-secondary">🖨 Print History</button>
+        </div>
+        <div class="table-container">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Days</th>
+                <th>Status</th>
+                <th>Applied On</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encashment Modal -->
+  <div id="encashmentModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>Leave Encashment Request</h3>
+        <button onclick="closeEncashmentModal()" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">Convert your unused leave days to payment. Please note that encashment is subject to approval.</p>
+        
+        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span>Annual Leave Available:</span>
+            <strong id="encashAnnualAvailable">0</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span>Sick Leave Available:</span>
+            <strong id="encashSickAvailable">0</strong>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Leave Type</label>
+          <select id="encashLeaveType" class="input" onchange="updateEncashmentDays()">
+            <option value="">Select leave type</option>
+            <option value="annual">Annual Leave</option>
+            <option value="sick">Sick Leave</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Number of Days to Encash</label>
+          <input type="number" id="encashDays" class="input" min="1" max="30" placeholder="Enter days" onchange="updateEncashmentDays()">
+          <small style="color: var(--text-muted);">Maximum 30 days per request</small>
+        </div>
+        
+        <div class="form-group">
+          <label>Reason</label>
+          <textarea id="encashReason" class="input" rows="3" placeholder="Enter reason for encashment"></textarea>
+        </div>
+        
+        <div style="background: var(--gray-800); padding: 1rem; border-radius: 0.5rem; margin-top: 1rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>Estimated Value:</span>
+            <strong id="encashValue" style="color: var(--gold-400);">KSH 0</strong>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeEncashmentModal()" class="btn btn-secondary">Cancel</button>
+        <button onclick="submitEncashment()" class="btn btn-primary">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-content">
@@ -334,6 +451,205 @@
     let attendanceRecords = [];
     let charts = {};
     let departmentColleagues = [];
+    let calendarDate = new Date();
+    let calendarEvents = [];
+    
+    // Calendar Functions
+    function showCalendarModal() {
+      document.getElementById('calendarModal').classList.add('active');
+      renderCalendar();
+      loadCalendarEvents();
+    }
+    
+    function closeCalendarModal() {
+      document.getElementById('calendarModal').classList.remove('active');
+    }
+    
+    async function loadCalendarEvents() {
+      try {
+        const db = firebase.firestore();
+        const snapshot = await db.collection('leave_requests')
+          .where('status', '==', 'approved')
+          .get();
+        
+        calendarEvents = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.staffName,
+            start: data.startDate?.toDate ? data.startDate.toDate() : new Date(data.startDate),
+            end: data.endDate?.toDate ? data.endDate.toDate() : new Date(data.endDate),
+            leaveType: data.leaveType,
+            department: data.department
+          };
+        });
+        
+        renderCalendar();
+      } catch (error) {
+        console.error('Error loading calendar events:', error);
+      }
+    }
+    
+    function renderCalendar() {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      
+      document.getElementById('calendarMonth').textContent = 
+        new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDay = firstDay.getDay();
+      
+      const holidays = LeaveModule.getPublicHolidays(year);
+      
+      let html = '<div style="background: var(--bg-secondary); padding: 0.5rem;">Sun</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Mon</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Tue</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Wed</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Thu</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Fri</div>';
+      html += '<div style="background: var(--bg-secondary); padding: 0.5rem;">Sat</div>';
+      
+      // Empty cells for days before first
+      for (let i = 0; i < startingDay; i++) {
+        html += '<div style="padding: 0.5rem; background: var(--gray-800);"></div>';
+      }
+      
+      // Days of the month
+      for (let day = 1; day <= daysInMonth; day++) {
+        const currentDate = new Date(year, month, day);
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        // Check for public holiday
+        const holiday = holidays.find(h => h.date === dateStr);
+        
+        // Check for leave events
+        const eventsOnDay = calendarEvents.filter(e => {
+          const start = new Date(e.start);
+          const end = new Date(e.end);
+          return currentDate >= start && currentDate <= end;
+        });
+        
+        let bgColor = 'var(--card-bg)';
+        let textColor = 'var(--text-primary)';
+        
+        if (holiday) {
+          bgColor = '#fbbf24';
+          textColor = '#000';
+        } else if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+          bgColor = 'var(--gray-700)';
+        } else if (eventsOnDay.length > 0) {
+          const type = eventsOnDay[0].leaveType;
+          if (type === 'annual') bgColor = '#22c55e';
+          else if (type === 'sick') bgColor = '#ef4444';
+          else if (type === 'personal') bgColor = '#3b82f6';
+          else bgColor = '#8b5cf6';
+        }
+        
+        html += `<div style="padding: 0.5rem; background: ${bgColor}; color: ${textColor}; font-size: 0.8rem;">
+          <div>${day}</div>
+          ${holiday ? `<div style="font-size: 0.6rem;">${holiday.name}</div>` : ''}
+          ${eventsOnDay.slice(0, 2).map(e => `<div style="font-size: 0.6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${e.title}</div>`).join('')}
+        </div>`;
+      }
+      
+      document.getElementById('calendarGrid').innerHTML = html;
+    }
+    
+    function changeMonth(delta) {
+      calendarDate.setMonth(calendarDate.getMonth() + delta);
+      renderCalendar();
+    }
+    
+    // History Functions
+    function showHistoryModal() {
+      document.getElementById('historyModal').classList.add('active');
+      loadLeaveHistory();
+    }
+    
+    function closeHistoryModal() {
+      document.getElementById('historyModal').classList.remove('active');
+    }
+    
+    async function loadLeaveHistory() {
+      const user = AuthModule.getCurrentUser();
+      if (!user) return;
+      
+      try {
+        const history = await LeaveModule.getLeaveHistory(user.uid);
+        
+        const tbody = document.getElementById('historyTableBody');
+        if (history.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No leave history found</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = history.map(r => {
+          const startDate = r.startDate?.toDate ? r.startDate.toDate().toLocaleDateString() : '-';
+          const endDate = r.endDate?.toDate ? r.endDate.toDate().toLocaleDateString() : '-';
+          const requestDate = r.requestDate?.toDate ? r.requestDate.toDate().toLocaleDateString() : '-';
+          
+          let statusClass = 'status-pending';
+          if (r.status === 'approved') statusClass = 'status-approved';
+          else if (r.status === 'rejected') statusClass = 'status-rejected';
+          else if (r.status === 'cancelled') statusClass = 'status-cancelled';
+          
+          return `<tr>
+            <td>${(r.leaveType || '').charAt(0).toUpperCase() + (r.leaveType || '').slice(1)}</td>
+            <td>${startDate}</td>
+            <td>${endDate}</td>
+            <td>${r.numberOfDays || '-'}</td>
+            <td><span class="status-badge ${statusClass}">${r.status}</span></td>
+            <td>${requestDate}</td>
+          </tr>`;
+        }).join('');
+      } catch (error) {
+        console.error('Error loading history:', error);
+      }
+    }
+    
+    function printLeaveHistory() {
+      const printWindow = window.open('', '_blank');
+      const history = document.getElementById('historyTableBody').innerHTML;
+      
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Leave History</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              h1 { text-align: center; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background: #f5f5f5; }
+            </style>
+          </head>
+          <body>
+            <h1>My Leave History</h1>
+            <p>Generated on: ${new Date().toLocaleDateString()}</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Days</th>
+                  <th>Status</th>
+                  <th>Applied On</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${history}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
     
     async function initDashboard() {
       const user = AuthModule.getCurrentUser();
@@ -687,6 +1003,72 @@
     function closeNewLeaveModal() {
       document.getElementById('newLeaveModal').classList.remove('active');
       document.getElementById('newLeaveForm').reset();
+    }
+    
+    function showEncashmentModal() {
+      document.getElementById('encashmentModal').classList.add('active');
+      loadEncashmentBalance();
+    }
+    
+    function closeEncashmentModal() {
+      document.getElementById('encashmentModal').classList.remove('active');
+      document.getElementById('encashLeaveType').value = '';
+      document.getElementById('encashDays').value = '';
+      document.getElementById('encashReason').value = '';
+      document.getElementById('encashValue').textContent = 'KSH 0';
+    }
+    
+    function loadEncashmentBalance() {
+      if (leaveBalance) {
+        const annual = (leaveBalance.annualLeave || 0) - (leaveBalance.usedAnnual || 0);
+        const sick = (leaveBalance.sickLeave || 0) - (leaveBalance.usedSick || 0);
+        document.getElementById('encashAnnualAvailable').textContent = annual;
+        document.getElementById('encashSickAvailable').textContent = sick;
+      }
+    }
+    
+    function updateEncashmentDays() {
+      const leaveType = document.getElementById('encashLeaveType').value;
+      const days = parseInt(document.getElementById('encashDays').value) || 0;
+      
+      let available = 0;
+      if (leaveBalance) {
+        if (leaveType === 'annual') {
+          available = (leaveBalance.annualLeave || 0) - (leaveBalance.usedAnnual || 0);
+        } else if (leaveType === 'sick') {
+          available = (leaveBalance.sickLeave || 0) - (leaveBalance.usedSick || 0);
+        }
+      }
+      
+      const maxDays = Math.min(days, available, 30);
+      if (days > maxDays && days > 0) {
+        document.getElementById('encashDays').value = maxDays;
+      }
+      
+      const dailyRate = 5000;
+      const value = (parseInt(document.getElementById('encashDays').value) || 0) * dailyRate;
+      document.getElementById('encashValue').textContent = 'KSH ' + value.toLocaleString();
+    }
+    
+    async function submitEncashment() {
+      const leaveType = document.getElementById('encashLeaveType').value;
+      const days = parseInt(document.getElementById('encashDays').value);
+      const reason = document.getElementById('encashReason').value;
+      
+      if (!leaveType || !days || !reason) {
+        AuthModule.showToast('Please fill all fields', 'error');
+        return;
+      }
+      
+      try {
+        const user = AuthModule.getCurrentUser();
+        await LeaveModule.requestEncashment(user.uid, leaveType, days, reason);
+        AuthModule.showToast('Encashment request submitted successfully');
+        closeEncashmentModal();
+      } catch (error) {
+        console.error('Error submitting encashment:', error);
+        AuthModule.showToast('Error submitting request', 'error');
+      }
     }
     
     document.getElementById('newLeaveForm').addEventListener('submit', async (e) => {
