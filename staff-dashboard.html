@@ -46,7 +46,7 @@
             <span id="themeIcon">🌙</span>
           </button>
           <div class="notification-container" style="position: relative; margin-right: 0.75rem;">
-            <button onclick="toggleNotificationPanel()" class="btn btn-secondary" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; position: relative;" title="Notifications">
+            <button onclick="toggleNotificationPanel(); loadNotifications();" class="btn btn-secondary" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; position: relative;" title="Notifications">
               🔔
             </button>
             <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
@@ -885,15 +885,24 @@
       const user = AuthModule.getCurrentUser();
       if (!user) return;
       
+      console.log('Loading notifications for user:', user.uid);
+      
       try {
         const db = firebase.firestore();
         const snapshot = await db.collection('notifications')
           .where('userId', '==', user.uid)
-          .orderBy('timestamp', 'desc')
           .limit(20)
           .get();
         
-        const notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort by timestamp client-side
+        notifications.sort((a, b) => {
+          const timeA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)) : new Date(0);
+          const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)) : new Date(0);
+          return timeB - timeA;
+        });
+        
+        console.log('Found notifications:', notifications.length);
         const list = document.getElementById('notificationList');
         
         if (notifications.length === 0) {
@@ -954,12 +963,14 @@
         const db = firebase.firestore();
         const snapshot = await db.collection('notifications')
           .where('userId', '==', user.uid)
-          .where('read', '==', false)
           .get();
         
         const batch = db.batch();
         snapshot.docs.forEach(doc => {
-          batch.update(doc.ref, { read: true });
+          const data = doc.data();
+          if (!data.read) {
+            batch.update(doc.ref, { read: true });
+          }
         });
         await batch.commit();
         
@@ -980,12 +991,10 @@
       
       notificationUnsubscribe = db.collection('notifications')
         .where('userId', '==', user.uid)
-        .orderBy('timestamp', 'desc')
         .limit(1)
         .onSnapshot(snapshot => {
-          if (!snapshot.empty) {
-            loadNotifications();
-          }
+          console.log('New notification detected');
+          loadNotifications();
         });
     }
     
