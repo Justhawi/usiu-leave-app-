@@ -1,8 +1,8 @@
 // Email Notification Module using EmailJS
 const EmailModule = {
-  serviceId: 'service_xxxxxxx', // Replace with your EmailJS service ID
-  templateId: 'template_xxxxxxx', // Replace with your EmailJS template ID
-  publicKey: 'xxxxxxxxxxxxxx', // Replace with your EmailJS public Key
+  serviceId: 'service_gm92ove', // EmailJS service ID
+  templateId: 'template_0w477ro', // EmailJS template ID
+  publicKey: 'scvGfuHbYIRdv6G-g', // EmailJS public Key
   
   init() {
     if (typeof emailjs !== 'undefined' && this.publicKey !== 'xxxxxxxxxxxxxx') {
